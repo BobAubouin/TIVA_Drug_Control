@@ -228,7 +228,7 @@ Number_of_patient = 128
 
 # param_opti = pd.read_csv('optimal_parameters_MPC_lin.csv')
 # param_opti = [int(param_opti['N']), int(param_opti['Nu']), float(param_opti['R']), float(param_opti['ki'])]
-MPC_param = [30, 30, 10**(2)*np.diag([10, 1]), 0.02]
+MPC_param = [30, 30, 10**(1.8)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, 1]
 phase = 'induction'
 
