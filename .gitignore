@@ -1,2 +1,7 @@
-__pycache__/
+*__pycache__*
+*.svg
+*.pdf
+TIVA_Drug_Control/*
+TIVA_Drug_Control
+BIS_parameters.csv
 
