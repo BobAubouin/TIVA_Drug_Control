@@ -1,7 +1,7 @@
 # TIVA_Drug_Control
 
 Git depository associated to the paper "Automated Multi-Drugs Administration During Total Intravenous Anesthesia Using Multi-Model Predictive Control"
-Use the Python Anesthesia Simulator to run the simulation and compute ther performances metrics.
+Use the [Python Anesthesia Simulator](https://github.com/BobAubouin/Python_Anesthesia_Simulator) to run the simulation and compute ther performances metrics.
 
 **Abstract:**
 
