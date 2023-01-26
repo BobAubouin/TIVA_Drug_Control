@@ -1,25 +1,19 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 Created on Thu Oct 13 13:05:00 2022
 
 @author: aubouinb
 """
 
+# Third party imports
 import matplotlib.pyplot as plt
-from bokeh.io import output_notebook
-from bokeh.layouts import row, column
-from bokeh.plotting import figure, show
 from scipy.linalg import block_diag
 from filterpy.common import Q_continuous_white_noise
-from functools import partial
-import multiprocessing
-from pyswarm import pso
-import pandas as pd
 import numpy as np
-from TIVA_Drug_Control.src.estimators import EKF
-from TIVA_Drug_Control.src.controller import PID
-from src import patient, disturbances, metrics
+
+# Local imports
+from src.estimators import EKF
+from src.controller import PID
+from python_anesthesia_simulator import patient, disturbances
 
 
 age = 24
@@ -35,6 +29,34 @@ Emax = 95
 
 
 def simu(Patient_info: list, PID_param: list, EKF_param: list, random_PK: bool = False, random_PD: bool = False):
+    """
+    Perform a closed-loop Propofol-Remifentanil anesthesia simulation with a PID controller.
+
+    Parameters
+    ----------
+    Patient_info : list
+        list of patient informations, Patient_info = [Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax].
+    style : str
+        Either 'induction' or 'total' to describe the phase to simulate.
+    PID_param : list
+        Parameters of the NMPC controller, MPC_param = [Kp, Ti, Td, ratio].
+    EKF_param : list
+        Parameters of the EKF, EKF_param = log_10([Q, P0, R]).
+    random_PK : bool, optional
+        Add uncertaintie to the PK model. The default is False.
+    random_PD : bool, optional
+        Add uncertainties to the PD model. The default is False.
+
+    Returns
+    -------
+    IAE : float
+        Integrated Absolute Error, performance index of the function
+    data : list
+        list of the signals during the simulation, data = [BIS, MAP, CO, up, ur]
+    BIS_param: list
+        BIS parameters of the simulated patient.
+
+    """
     age = Patient_info[0]
     height = Patient_info[1]
     weight = Patient_info[2]
@@ -50,7 +72,7 @@ def simu(Patient_info: list, PID_param: list, EKF_param: list, random_PK: bool =
 
     BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
     George = patient.Patient(age, height, weight, gender, BIS_param=BIS_param,
-                             Random_PK=random_PK, Random_PD=random_PD, Ts=ts)  # , model_propo = 'Eleveld', model_remi = 'Eleveld')
+                             Random_PK=random_PK, Random_PD=random_PD, Ts=ts)
 
     # Nominal parameters
     George_nominal = patient.Patient(age, height, weight, gender, BIS_param=[None]*6, Ts=ts)
@@ -65,8 +87,7 @@ def simu(Patient_info: list, PID_param: list, EKF_param: list, random_PK: bool =
     B_nom = block_diag(Bp, Br)
 
     # init state estimator
-    Q = np.eye(8)*10**EKF_param[0]  # Q_continuous_white_noise(
-    # 4, spectral_density=10**EKF_param[0], block_size=2)
+    Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)
     P0 = np.eye(8) * EKF_param[1]
     estimator = EKF(A_nom, B_nom, BIS_param=BIS_param_nominal, ts=ts,
                     P0=P0, R=EKF_param[2], Q=Q)
@@ -120,7 +141,7 @@ def simu(Patient_info: list, PID_param: list, EKF_param: list, random_PK: bool =
 
 EKF_param = [1, -1, 1]
 # %% Patient table:
-#index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
+# index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
 Patient_table = [[1,  40, 163, 54, 0, 4.73, 24.97,  1.08,  0.30, 97.86, 89.62],
                  [2,  36, 163, 50, 0, 4.43, 19.33,  1.16,  0.29, 89.10, 98.86],
                  [3,  28, 164, 52, 0, 4.81, 16.89,  1.54,  0.14, 93.66, 94.],
@@ -135,48 +156,13 @@ Patient_table = [[1,  40, 163, 54, 0, 4.73, 24.97,  1.08,  0.30, 97.86, 89.62],
                  [12, 34, 172, 58, 0, 5.70, 18.64,  2.02,  0.40, 99.57, 96.94],
                  [13, 38, 169, 65, 0, 4.64, 19.50,  1.43,  0.48, 93.82, 94.40]]
 
-
-def one_simu(x, i):
-    '''cost of one simulation, i is the patient index'''
-    Patient_info = Patient_table[i-1][1:]
-    param_PID = [2,  0.013208,  300.0,  10.0]
-    iae, data = simu(Patient_info, [10**x[0], 10**x[1], 10**x[2]], param_PID, random_PK=True)
-    return iae
-
-
-def cost(x):
-    '''cost of the optimization, x is the vector of the PID controller
-    x = [Kp, Ti, Td]
-    IAE is the maximum integrated absolut error over the patient population'''
-    if x[1] > x[0]:
-        return 100000
-    pool_obj = multiprocessing.Pool(8)
-    func = partial(one_simu, x)
-    IAE = pool_obj.map(func, range(0, 13))
-    pool_obj.close()
-    pool_obj.join()
-
-    return max(IAE)
-
-
-try:
-    param_opti = pd.read_csv('optimal_parameters_EKF.csv')
-except:
-    param_opti = pd.DataFrame(columns=['Q', 'P0', 'R'])
-    lb = [-5, -5, 4]
-    ub = [0, 0, 10]
-    xopt, fopt = pso(cost, lb, ub, debug=True, minfunc=1, swarmsize=50)  # Default: 100 particles as in the article
-    param_opti = pd.concat((param_opti, pd.DataFrame(
-        {'Q': xopt[0], 'P0': xopt[1], 'R': xopt[2]}, index=[0])), ignore_index=True)
-    param_opti.to_csv('optimal_parameters_EKF.csv')
-
-    # %% show results on mean patient
+# %% show results on mean patient
 
 
 param_PID = [0.016894,  325.329175,  7.682692, 2]
 Patient_info = Patient_table[9-1][1:]
 
-EKF_param = [0, -1, 5]
+EKF_param = [1, -1, 1]
 
 iae, data = simu(Patient_info, param_PID, EKF_param)
 

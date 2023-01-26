@@ -106,7 +106,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
                     BIS_parameters.append(temp.copy())
 
     # State estimator parameters
-    Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)  # np.eye(8) * 10**EKF_param[0]  #
+    Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)
     P0 = np.eye(8) * 10**EKF_param[1]
     Estimator_list = []
 

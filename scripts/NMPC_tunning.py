@@ -278,7 +278,6 @@ for i in range(len(Patient_table)):
             line_color="#006d43", legend_label='propofol (mg/min)')
     p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
-    p3.line(np.arange(0, len(data[8]))*ts/60, data[8], legend_label='Best model id')
     p4.line(data[6][3], data[7][3])
     # TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
     #     data[0], Ts=ts, phase=phase)

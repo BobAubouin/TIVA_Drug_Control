@@ -10,7 +10,6 @@ from functools import partial
 # Third party imports
 import numpy as np
 import pandas as pd
-from bokeh.io import export_svg
 from bokeh.models import HoverTool
 from bokeh.layouts import row, column
 from bokeh.plotting import figure, show
@@ -18,22 +17,38 @@ from pyswarm import pso
 import casadi as cas
 
 # Local imports
-from src.pid import PID
+from src.controller import PID
 from python_anesthesia_simulator import patient, disturbances, metrics
 
 
-def simu(Patient_info: list, style: str, PID_param: list, random_PK: bool = False, random_PD: bool = False):
-    ''' This function perform a closed-loop Propofol-Remifentanil anesthesia simulation with a PID controller.
+def simu(Patient_info: list, style: str, PID_param: list,
+         random_PK: bool = False, random_PD: bool = False) -> (float, list, list):
+    """
+    Perform a closed-loop Propofol-Remifentanil anesthesia simulation with a PID controller.
 
-    Inputs: - Patient_info: list of patient informations, Patient_info = [Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax]
-            - style: either 'induction' or 'maintenance' to describe the phase to simulate
-            - PID_param: parameter of the PID controller P = [Kp, Ti, Td, ratio]
-            - random: bool to add uncertainty to simulate intra-patient variability in the patient model
+    Parameters
+    ----------
+    Patient_info : list
+        list of patient informations, Patient_info = [Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax].
+    style : str
+        Either 'induction' or 'total' to describe the phase to simulate.
+    PID_param : list
+        Parameters of the NMPC controller, MPC_param = [Kp, Ti, Td, ratio].
+    random_PK : bool, optional
+        Add uncertaintie to the PK model. The default is False.
+    random_PD : bool, optional
+        Add uncertainties to the PD model. The default is False.
 
-    Outputs:- IAE: Integrated Absolute Error, performance index of the function
-            - data: list of the signals during the simulation data = [BIS, MAP, CO, up, ur]
-    '''
+    Returns
+    -------
+    IAE : float
+        Integrated Absolute Error, performance index of the function
+    data : list
+        list of the signals during the simulation, data = [BIS, MAP, CO, up, ur]
+    BIS_param: list
+        BIS parameters of the simulated patient.
 
+    """
     age = Patient_info[0]
     height = Patient_info[1]
     weight = Patient_info[2]
@@ -183,7 +198,7 @@ def simu(Patient_info: list, style: str, PID_param: list, random_PK: bool = Fals
             uP = PID_controller.one_step(BIS[i], BIS_cible)
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    return IAE, [BIS, MAP, CO, Up, Ur]
+    return IAE, [BIS, MAP, CO, Up, Ur], George.BisPD.BIS_param
 
 
 # %% PSO
@@ -209,16 +224,18 @@ phase = 'induction'
 
 
 def one_simu(x, ratio, i):
-    '''cost of one simulation, i is the patient index'''
+    """Cost of one simulation, i is the patient index."""
     Patient_info = Patient_table[i-1][1:]
-    iae, data = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
+    iae, data, bis_param = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
     return iae
 
 
 def cost(x, ratio):
-    """cost of the optimization, x is the vector of the PID controller
+    """Cost of the optimization, x is the vector of the PID controller.
+
     x = [Kp, Ti, Td]
-    IAE is the maximum integrated absolut error over the patient population"""
+    IAE is the maximum integrated absolut error over the patient population.
+    """
     pool_obj = multiprocessing.Pool()
     func = partial(one_simu, x, ratio)
     IAE = pool_obj.map(func, range(0, 13))
@@ -230,9 +247,9 @@ def cost(x, ratio):
 
 try:
     if phase == 'maintenance':
-        param_opti = pd.read_csv('./example/optimal_parameters_PID_reject.csv')
+        param_opti = pd.read_csv('./scripts/optimal_parameters_PID_reject.csv')
     else:
-        param_opti = pd.read_csv('./example/optimal_parameters_PID.csv')
+        param_opti = pd.read_csv('./scripts/optimal_parameters_PID.csv')
 except:
     param_opti = pd.DataFrame(columns=['ratio', 'Kp', 'Ti', 'Td'])
     for ratio in range(2, 3):
@@ -250,13 +267,12 @@ except:
         param_opti.to_csv('./example/optimal_parameters_PID.csv')
 
 # %%test on patient table
-
+ts = 1
 IAE_list = []
 TT_list = []
 p1 = figure(width=900, height=300)
 p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
-
 for ratio in range(2, 3):
     print('ratio = ' + str(ratio))
     Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
@@ -265,14 +281,28 @@ for ratio in range(2, 3):
     PID_param = [Kp, Ti, Td, ratio]
     for i in range(1, 14):
         Patient_info = Patient_table[i-1][1:]
-        IAE, data = simu(Patient_info, phase, PID_param)
-        p1.line(np.arange(0, len(data[0]))/60, data[0])
-        p2.line(np.arange(0, len(data[0]))/60, data[1], legend_label='MAP (mmgh)')
-        p2.line(np.arange(0, len(data[0]))/60, data[2]*10,
+        IAE, data, BIS_param = simu(Patient_info, phase, PID_param)
+        source = pd.DataFrame(data=data[0], columns=['BIS'])
+        source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
+        source.insert(len(source.columns), "Ce50_P", BIS_param[0])
+        source.insert(len(source.columns), "Ce50_R", BIS_param[1])
+        source.insert(len(source.columns), "gamma", BIS_param[2])
+        source.insert(len(source.columns), "beta", BIS_param[3])
+        source.insert(len(source.columns), "E0", BIS_param[4])
+        source.insert(len(source.columns), "Emax", BIS_param[5])
+
+        plot = p1.line(x='time', y='BIS', source=source)
+        tooltips = [('Ce50_P', "@Ce50_P"), ('Ce50_R', "@Ce50_R"),
+                    ('gamma', "@gamma"), ('beta', "@beta"),
+                    ('E0', "@E0"), ('Emax', "@Emax")]
+        p1.add_tools(HoverTool(renderers=[plot], tooltips=tooltips))
+        p2.line(np.arange(0, len(data[0]))*ts/60,
+                data[1], legend_label='MAP (mmgh)')
+        p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
                 legend_label='CO (cL/min)', line_color="#f46d43")
-        p3.line(np.arange(0, len(data[3]))/60, data[3],
+        p3.line(np.arange(0, len(data[3]))*ts/60, data[3],
                 line_color="#006d43", legend_label='propofol (mg/min)')
-        p3.line(np.arange(0, len(data[4]))/60, data[4],
+        p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
                 line_color="#f46d43", legend_label='remifentanil (ng/min)')
         if phase == 'induction':
             TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
@@ -293,72 +323,13 @@ print("Mean TT : " + str(np.mean(TT_list)))
 print("Min TT : " + str(np.min(TT_list)))
 print("Max TT : " + str(np.max(TT_list)))
 
-# %% inter-patient variability test
-# Simulation parameter
-# phase = 'induction'
-# ratio = 2
-# Number_of_patient = 500
-
-# # Controller parameters
-# Kp = float(param_opti.loc[param_opti['ratio']==ratio, 'Kp'])
-# Ti = float(param_opti.loc[param_opti['ratio']==ratio, 'Ti'])
-# Td = float(param_opti.loc[param_opti['ratio']==ratio, 'Td'])
-# PID_param = [Kp, Ti, Td, ratio]
-
-
-# IAE_list = []
-# TT_list = []
-# p1 = figure(plot_width=900, plot_height=300)
-# p2 = figure(plot_width=900, plot_height=300)
-# p3 = figure(plot_width=900, plot_height=300)
-
-# for i in range(Number_of_patient):
-#     if i%20==0:
-#         print(i)
-#     #Generate random patient information with uniform distribution
-#     age = np.random.randint(low=18,high=70)
-#     height = np.random.randint(low=150,high=190)
-#     weight = np.random.randint(low=50,high=100)
-#     gender = np.random.randint(low=0,high=1)
-#     #generate PD model with normal distribution from Bouillon et al.
-#     Ce50p = np.random.normal(loc = 4.47, scale = 4.92*0.066)
-#     Ce50r = np.random.normal(loc = 19.3, scale = 8*0.394)
-#     gamma = np.random.normal(loc = 1.43, scale = 1.43*0.142)
-#     beta = 0
-#     E0 = min(100, np.random.normal(loc = 97.4, scale = 97.4*0.005)) #standard deviation not gived in the article, arbitrary fixed to 5%
-#     Emax = E0
-
-#     Patient_info = [age, height, weight, gender, Ce50p, Ce50r, gamma, beta, E0, Emax]
-#     IAE, data = simu(Patient_info, phase, PID_param)
-#     p1.line(np.arange(0,len(data[0]))/60, data[0])
-#     p2.line(np.arange(0,len(data[0]))/60, data[1], legend_label='MAP (mmgh)')
-#     p2.line(np.arange(0,len(data[0]))/60, data[2]*10, legend_label='CO (cL/min)', line_color="#f46d43")
-#     p3.line(np.arange(0,len(data[3]))/60, data[3], line_color="#006d43", legend_label='propofol (mg/min)')
-#     p3.line(np.arange(0,len(data[4]))/60, data[4], line_color="#f46d43", legend_label='remifentanil (ng/min)')
-#     TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(data[0], Te = 1, phase = phase)
-#     TT_list.append(TT)
-#     IAE_list.append(IAE)
-
-# p1.title.text = 'BIS'
-# p3.title.text = 'Infusion rates'
-# p3.xaxis.axis_label = 'Time (min)'
-# grid = row(column(p3,p1,p2))
-
-# show(grid)
-
-# print("Mean IAE : " + str(np.mean(IAE_list)))
-# print("Mean TT : " + str(np.mean(TT_list)))
-# print("Min TT : " + str(np.min(TT_list)))
-# print("Max TT : " + str(np.max(TT_list)))
-
-
 # %% Intra patient variability
 
 
 # Simulation parameter
-phase = 'maintenance'
+phase = 'induction'
 ratio = 2
-Number_of_patient = 500
+Number_of_patient = 10
 
 # Controller parameters
 Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
@@ -378,8 +349,8 @@ for i in range(Number_of_patient):
     gender = np.random.randint(low=0, high=1)
 
     Patient_info = [age, height, weight, gender] + [None] * 6
-    IAE, data = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
+    IAE, data, bis_param = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-df.to_csv("TIVA_Drug_Control/Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
