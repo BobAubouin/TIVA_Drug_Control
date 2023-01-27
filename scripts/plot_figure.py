@@ -27,9 +27,9 @@ phase = 'induction'
 Patient_id = 108
 
 
-Data_PID = pd.read_csv("./TIVA_Drug_Control/Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
-Data_MMPC = pd.read_csv("./TIVA_Drug_Control/Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
-Data_NMPC = pd.read_csv("./TIVA_Drug_Control/Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
+Data_PID = pd.read_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
+Data_MMPC = pd.read_csv("./Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
+Data_NMPC = pd.read_csv("./Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
 
 BIS_PID = Data_PID[str(Patient_id)+'_BIS']
 BIS_NMPC = Data_NMPC[str(Patient_id)+'_BIS']
@@ -68,7 +68,7 @@ gridline_of_interest.set_visible(False)
 plt.draw()
 
 # save it
-savepath = "./TIVA_Drug_Control/Results_Images/BIS_case="+str(Patient_id) + ".pdf"
+savepath = "./Results_Images/BIS_case="+str(Patient_id) + ".pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -91,8 +91,38 @@ plt.xlim([-0.2, 10.2])
 plt.xlabel('Time (min)', fontsize=13)
 plt.draw()
 
+
+# fig, ax = plt.subplots(2, 1)
+# linewidth = 1.3
+# ax[0].plot(Time_PID, Up_PID, label='PID', linewidth=linewidth)
+# ax[0].plot(Time_MPC, Up_NMPC, label='NMPC', linewidth=linewidth)
+# ax[0].plot(Time_MPC, Up_MMPC, label='MMPC', linewidth=linewidth)
+
+# ax[1].plot(Time_PID, Ur_PID, linewidth=linewidth, label='PID')
+# ax[1].plot(Time_MPC, Ur_NMPC, linewidth=linewidth, label='NMPC')
+# ax[1].plot(Time_MPC, Ur_MMPC, linewidth=linewidth, label='MMPC')
+
+# ax[0].grid(linewidth=0.4)
+# ax[1].grid(linewidth=0.4)
+
+# ax[0].legend(fontsize=13)
+# ax[1].legend(fontsize=13)
+
+# # ax[0].set_title("Propofol rate")
+# # ax[1].set_title("Remifentanil rate")
+
+# ax[0].set_xlim([-0.2, 10.2])
+# ax[1].set_xlim([-0.2, 10.2])
+
+# ax[0].set_ylabel('Propofol (mg/s)', fontsize=13)
+# ax[1].set_ylabel('Remifentanil (µg/s)', fontsize=13)
+
+# ax[1].set_xlabel('Time (min)', fontsize=13)
+
+# plt.draw()
+
 # save it
-savepath = "./TIVA_Drug_Control/Results_Images/Rates_case="+str(Patient_id) + ".pdf"
+savepath = "./Results_Images/Rates_case="+str(Patient_id) + ".pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -133,6 +163,39 @@ plt.xlim([-0.2, 10.2])
 plt.draw()
 
 # save it
-savepath = "./TIVA_Drug_Control/Results_Images/BIS_mean_case.pdf"
+savepath = "./Results_Images/BIS_mean_case.pdf"
+plt.savefig(savepath, bbox_inches='tight', format='pdf')
+plt.show()
+
+# %% illustrate cost choice
+
+u = np.linspace(0, 1.5, 100)
+
+J_quadratic = np.square(u)
+J_quartic = np.square(J_quadratic)
+
+ue = 0.7
+fontsize_plot = 15
+fig, ax = plt.subplots()
+ax.plot(u, J_quadratic, 'b', label="Quadratic cost")
+ax.plot(u, J_quartic, 'r', label="Quartic cost")
+ax.axvline(x=ue, ymin=-1, ymax=0.29, linestyle='--', color="black")
+ax.annotate('$U_e$', xy=(0.7, 1.5), fontsize=fontsize_plot)
+ax.grid(linewidth=0.4)
+ax.legend(fontsize=fontsize_plot)
+ax.set_xlabel('$U$', fontsize=fontsize_plot)
+ax.set_ylabel('$J$', fontsize=fontsize_plot)
+
+
+# set aspect ratio to 1
+ratio = 0.9
+x_left, x_right = ax.get_xlim()
+y_low, y_high = ax.get_ylim()
+ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
+
+plt.draw()
+
+# save it
+savepath = "./Results_Images/cost.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()

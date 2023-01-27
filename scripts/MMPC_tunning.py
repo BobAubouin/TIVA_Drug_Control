@@ -258,13 +258,13 @@ def one_simu(i):
     return [IAE, data, BIS_param, i]
 
 
-t0 = time.time()
-pool_obj = multiprocessing.Pool(8)
-result = pool_obj.map(one_simu, range(1, 15))
-pool_obj.close()
-pool_obj.join()
-t1 = time.time()
-print('one_step time: ' + str((t1-t0)*8/(len(result[0][1][0])*13)))
+# t0 = time.time()
+# pool_obj = multiprocessing.Pool(8)
+# result = pool_obj.map(one_simu, range(1, 15))
+# pool_obj.close()
+# pool_obj.join()
+# t1 = time.time()
+# print('one_step time: ' + str((t1-t0)*8/(len(result[0][1][0])*13)))
 
 IAE_list = []
 TT_list = []
@@ -273,13 +273,17 @@ p1 = figure(width=900, height=300)
 p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
 p4 = figure(width=900, height=300)
-for i in range(14):
+time_simulation = []
+for i in range(13):
     print(i)
-    # Patient_info = Patient_table[i][1:]
-    # IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
-    IAE = result[i][0]
-    data = result[i][1]
-    BIS_param = result[i][2]
+    Patient_info = Patient_table[i][1:]
+    t0 = time.time()
+    IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
+    t1 = time.time()
+    time_simulation.append(t1-t0)
+    # IAE = result[i][0]
+    # data = result[i][1]
+    # BIS_param = result[i][2]
 
     # Xp_EKF = data[6]
     # Xp = data[9]
@@ -327,7 +331,7 @@ for i in range(14):
     # ST10_list.append(ST10)
     # IAE_list.append(IAE)
 
-
+print(np.mean(time_simulation)/len(data[0]))
 p1.title.text = 'BIS'
 p3.title.text = 'Infusion rates'
 p1.xaxis.axis_label = 'Time (min)'
