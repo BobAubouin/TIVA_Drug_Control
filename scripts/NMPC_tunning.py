@@ -122,13 +122,13 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         for i in range(N_simu):
 
             Dist = disturbances.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
             Xp[:, i] = George.PropoPK.x.T[0]
             Xr[:, i] = George.RemiPK.x.T[0]
 
-            BIS[i] = min(100, Bis)
-            MAP[i] = Map[0, 0]
-            CO[i] = Co[0, 0]
+            BIS[i] = Bis
+            MAP[i] = Map
+            CO[i] = Co
             Up[i] = uP
             Ur[i] = uR
             # estimation
@@ -158,17 +158,15 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         uP = 1
         uR = 1
         for i in range(N_simu):
-            # if i == 100:
-            #     print("break")
 
             Dist = disturbances.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map = George.one_step(uP, uR, Dist=Dist, noise=True)
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=True)
             Xp[:, i] = George.PropoPK.x.T[0]
             Xr[:, i] = George.RemiPK.x.T[0]
 
-            BIS[i] = min(100, Bis)
-            MAP[i] = Map[0, 0]
-            CO[i] = Co[0, 0]
+            BIS[i] = Bis
+            MAP[i] = Map
+            CO[i] = Co
             Up[i] = uP
             Ur[i] = uR
             # estimation

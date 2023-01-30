@@ -119,13 +119,13 @@ def simu(Patient_info: list, PID_param: list, EKF_param: list, random_PK: bool =
         uR = min(ur_max, max(0, uP*ratio))  # + 0.5*max(0,np.sin(i/15)) + 0.2*int(i>200)
         uP = min(up_max, max(0, uP))  # + 0.5*max(0,np.cos(i/8)) + 0.1*int(i>400)
         Dist = disturbances.compute_disturbances(i, 'step')
-        Bis, Co, Map = George.one_step(uP, uR, Dist=Dist, noise=True)
+        Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=True)
         Xp[:, i] = George.PropoPK.x.T[0]
         Xr[:, i] = George.RemiPK.x.T[0]
 
-        BIS[i] = min(100, Bis)
-        MAP[i] = Map[0, 0]
-        CO[i] = Co[0, 0]
+        BIS[i] = Bis
+        MAP[i] = Map
+        CO[i] = Co
         Up[i] = uP
         Ur[i] = uR
         # estimation

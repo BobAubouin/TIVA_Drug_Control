@@ -106,7 +106,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
                     BIS_parameters.append(temp.copy())
 
     # State estimator parameters
-    Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)
+    Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)  # np.eye(8) * 10**EKF_param[0]  #
     P0 = np.eye(8) * 10**EKF_param[1]
     Estimator_list = []
 
@@ -135,6 +135,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
 
     Controller = MMPC(Estimator_list, Controller_list, hysteresis=MMPC_param[4], window_length=MMPC_param[0],
                       best_init=13, alpha=MMPC_param[1], beta=MMPC_param[2], lambda_p=MMPC_param[3])
+
     if style == 'induction':
         N_simu = int(10 / ts) * 60
         BIS = np.zeros(N_simu)
@@ -153,12 +154,12 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         for i in range(N_simu):
 
             Dist = disturbances.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
             Xp[:, i] = George.PropoPK.x.T[0]
             Xr[:, i] = George.RemiPK.x.T[0]
-            BIS[i] = min(100, Bis)
-            MAP[i] = Map[0, 0]
-            CO[i] = Co[0, 0]
+            BIS[i] = Bis
+            MAP[i] = Map
+            CO[i] = Co
             if i == N_simu - 1:
                 break
             # control
@@ -189,22 +190,19 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         uP = 1e-3
         uR = 1e-3
         for i in range(N_simu):
-            # if i == 100:
-            #     print("break")
 
             Dist = disturbances.compute_disturbances(i*ts, 'step')
-            Bis, Co, Map = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
             Xp[:, i] = George.PropoPK.x.T[0]
             Xr[:, i] = George.RemiPK.x.T[0]
 
-            BIS[i] = min(100, Bis)
-            MAP[i] = Map[0, 0]
-            CO[i] = Co[0, 0]
+            BIS[i] = Bis
+            MAP[i] = Map
+            CO[i] = Co
             if i == N_simu - 1:
                 break
             # control
             if i > 120/ts:
-                # MMPC.controller.ki = ki_mpc
                 for j in range(model_number):
                     MMPC.controller_list[j].ki = ki_mpc
             U, best_model = MMPC.one_step([uP, uR], Bis)
