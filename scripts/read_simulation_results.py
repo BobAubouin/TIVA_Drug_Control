@@ -16,17 +16,20 @@ from bokeh.io import export_svg
 from python_anesthesia_simulator import metrics
 
 
-Number_of_patient = 500
+Number_of_patient = 128
 phase = 'induction'
 
-
-title = '_NMPC'
+# choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
+# title = '_NMPC'
 # title = '_multi_NMPC'
 # title = '_MPC_lin'
-ts = 2
-# title = '_PID'
-# ts = 1
-Data = pd.read_csv("./TIVA_Drug_Control/Results_data/result" + title + "_n=" + str(Number_of_patient) + '.csv')
+title = '_PID'
+
+if title == '_PID':
+    ts = 1
+else:
+    ts = 2
+Data = pd.read_csv("./Results_data/result" + title + "_n=" + str(Number_of_patient) + '.csv')
 
 
 if phase == 'induction':
@@ -149,8 +152,8 @@ styler.hide(axis='index')
 styler.format(precision=2)
 print(styler.to_latex())
 
-result_table.to_csv("./TIVA_Drug_Control/Results_data/result_table" + title + "_n=" + str(Number_of_patient))
+result_table.to_csv("./Results_data/result_table" + title + "_n=" + str(Number_of_patient))
 p1.output_backend = "svg"
-export_svg(p1, filename="./TIVA_Drug_Control/Results_Images/BIS" + title + "_n=" + str(Number_of_patient) + ".svg")
+export_svg(p1, filename="./Results_Images/BIS" + title + "_n=" + str(Number_of_patient) + ".svg")
 p3.output_backend = "svg"
-export_svg(p3, filename="./TIVA_Drug_Control/Results_Images/input" + title + "_n=" + str(Number_of_patient) + ".svg")
+export_svg(p3, filename="./Results_Images/input" + title + "_n=" + str(Number_of_patient) + ".svg")

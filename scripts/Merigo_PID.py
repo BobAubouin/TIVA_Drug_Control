@@ -327,8 +327,7 @@ print("Max TT : " + str(np.max(TT_list)))
 # Simulation parameter
 phase = 'induction'
 ratio = 2
-Number_of_patient = 10
-
+Number_of_patient = 500
 # Controller parameters
 Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
 Ti = float(param_opti.loc[param_opti['ratio'] == ratio, 'Ti'])
@@ -351,4 +350,7 @@ for i in range(Number_of_patient):
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+if phase == 'maintenance':
+    df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+else:
+    df.to_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
