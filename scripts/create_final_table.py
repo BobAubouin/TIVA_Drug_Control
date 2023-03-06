@@ -7,7 +7,7 @@ Created on Tue Jan 24 10:54:59 2023
 import pandas as pd
 
 
-folder_path = './TIVA_Drug_Control/Results_data/'
+folder_path = './Results_data/'
 
 Table_PID = pd.read_csv(folder_path + 'result_table_PID_n=500')
 Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_n=500')

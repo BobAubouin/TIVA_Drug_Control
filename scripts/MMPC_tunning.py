@@ -22,18 +22,18 @@ import matplotlib.pyplot as plt
 # Local imports
 from src.estimators import EKF
 from src.controller import NMPC, MMPC
-from python_anesthesia_simulator import patient, disturbances
+import python_anesthesia_simulator as pas
 
 
 def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_param: list,
          random_PK: bool = False, random_PD: bool = False) -> (float, list, list):
     """
-    Simu function perform a closed-loop Propofol-Remifentanil anesthesia.
+    Simu function perform a closed-loop Propofol-Remifentanil to BIS anesthesia.
 
     Parameters
     ----------
     Patient_info : list
-        list of patient informations, Patient_info = [Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax].
+        list of patient informations, Patient_info = [Age[yr], H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax].
     style : str
         Either 'induction' or 'total' to describe the phase to simulate.
     MPC_param : list
@@ -58,10 +58,6 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         BIS parameters of the simulated patient.
 
     """
-    age = Patient_info[0]
-    height = Patient_info[1]
-    weight = Patient_info[2]
-    gender = Patient_info[3]
     Ce50p = Patient_info[4]
     Ce50r = Patient_info[5]
     gamma = Patient_info[6]
@@ -71,45 +67,45 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
 
     ts = 2
 
-    BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
-    George = patient.Patient(age, height, weight, gender, BIS_param=BIS_param,
-                             Random_PK=random_PK, Random_PD=random_PD, Ts=ts)
+    if not Ce50p:
+        BIS_param = None
+    else:
+        BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
+        # BIS_param = [3.5, 19.3, 1.43, 0, 97.4, 97.4]
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
+                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
 
     # Nominal parameters
-    George_nominal = patient.Patient(age, height, weight, gender, BIS_param=[None] * 6, Ts=ts)
-    BIS_param_nominal = George_nominal.BisPD.BIS_param
-    BIS_param_nominal[4] = George.BisPD.BIS_param[4]
+    George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
+    BIS_param_nominal = George_nominal.hill_param
+    # BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.PropoPK.A
-    Ar = George_nominal.RemiPK.A
-    Bp = George_nominal.PropoPK.B
-    Br = George_nominal.RemiPK.B
+    Ap = George_nominal.propo_pk.continuous_sys.A
+    Ar = George_nominal.remi_pk.continuous_sys.A
+    Bp = George_nominal.propo_pk.continuous_sys.B
+    Br = George_nominal.remi_pk.continuous_sys.B
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
-    model_number = 3 * 3 * 3 * 2
-    coeff = 1.5
-    std_Cep = 1.34 * coeff
-    std_Cer = 5.79 * coeff
-    std_gamma = 0.73 * coeff
-    std_beta = 0.5 * coeff
+    cv_c50p = 0.182
+    cv_c50r = 0.888
+    cv_gamma = 0.304
 
+    # estimation of log normal standard deviation
+    w_c50p = np.sqrt(np.log(1+cv_c50p**2))
+    w_c50r = np.sqrt(np.log(1+cv_c50r**2))
+    w_gamma = np.sqrt(np.log(1+cv_gamma**2))
+
+    c50p_list = BIS_param_nominal[0]*np.exp([-2*w_c50p, 0, w_c50p])
+    c50r_list = BIS_param_nominal[1]*np.exp([-3*w_c50r, -1*w_c50r, 0, w_c50r])
+    gamma_list = BIS_param_nominal[2]*np.exp([-2*w_gamma, 0, w_gamma])
     BIS_parameters = []
-    BIS_param_grid = BIS_param_nominal.copy()
-    BIS_param_grid[3] = BIS_param_nominal[3] - std_beta
-    for m in range(2):
-        BIS_param_grid[3] += std_beta
-        BIS_param_grid[0] = BIS_param_nominal[0] - 2 * std_Cep
-        for i in range(3):
-            BIS_param_grid[0] += std_Cep
-            BIS_param_grid[1] = BIS_param_nominal[1] - 2 * std_Cer
-            for j in range(3):
-                BIS_param_grid[1] += std_Cer
-                BIS_param_grid[2] = BIS_param_nominal[2] + 2 * std_gamma
-                for k in range(3):
-                    BIS_param_grid[2] -= std_gamma
-                    temp = list(np.clip(np.array(BIS_param_grid), [2, 10, 1, 0, 80, 75], [8, 26, 5, 3, 100, 100]))
-                    BIS_parameters.append(temp.copy())
+    for c50p in c50p_list:
+        for c50r in c50r_list:
+            for gamma in gamma_list:
+                BIS_parameters.append([c50p, c50r, gamma]+BIS_param_nominal[3:])
+
+    model_number = len(BIS_parameters)
 
     # State estimator parameters
     Q = Q_continuous_white_noise(4, spectral_density=10**EKF_param[0], block_size=2)  # np.eye(8) * 10**EKF_param[0]  #
@@ -159,21 +155,23 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         uR = 1e-3
         for i in range(N_simu):
 
-            Dist = disturbances.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.PropoPK.x.T[0]
-            Xr[:, i] = George.RemiPK.x.T[0]
+            Dist = pas.compute_disturbances(i * ts, 'null')
+            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x
+            Xr[:, i] = George.remi_pk.x
             BIS[i] = Bis
             MAP[i] = Map
             CO[i] = Co
             if i == N_simu - 1:
                 break
             # control
-            if i > 120/ts:
+            if i > 90/ts:
                 # MMPC.controller.ki = ki_mpc
                 for j in range(model_number):
                     Controller.controller_list[j].ki = ki_mpc
             U, best_model = Controller.one_step([uP, uR], Bis)
+            Xp_EKF[:, i] = Estimator_list[13].x[:4]
+            Xr_EKF[:, i] = Estimator_list[13].x[4:]
             best_model_id[i] = best_model
             uP = U[0]
             uR = U[1]
@@ -182,29 +180,16 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
 
     elif style == 'total':
         N_simu = int(30 / ts) * 60
-        BIS = np.zeros(N_simu)
         BIS_cible_MPC = np.zeros(N_simu)
-        MAP = np.zeros(N_simu)
-        CO = np.zeros(N_simu)
-        Up = np.zeros(N_simu)
-        Ur = np.zeros(N_simu)
         best_model_id = np.zeros(N_simu)
-        Xp = np.zeros((4, N_simu))
-        Xr = np.zeros((4, N_simu))
         Xp_EKF = np.zeros((4 * model_number, N_simu))
         Xr_EKF = np.zeros((4 * model_number, N_simu))
         uP = 1e-3
         uR = 1e-3
         for i in range(N_simu):
 
-            Dist = disturbances.compute_disturbances(i*ts, 'step')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.PropoPK.x.T[0]
-            Xr[:, i] = George.RemiPK.x.T[0]
-
-            BIS[i] = Bis
-            MAP[i] = Map
-            CO[i] = Co
+            Dist = pas.compute_disturbances(i*ts, 'step')
+            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
             if i == N_simu - 1:
                 break
             # control
@@ -215,33 +200,20 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             best_model_id[i] = best_model
             uP = U[0]
             uR = U[1]
-            Up[i] = uP
-            Ur[i] = uR
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr], George.BisPD.BIS_param)
+    print(np.array(BIS_parameters[best_model]).round(3))
+    print(np.array(George.hill_param).round(3))
+    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr], George.hill_param)
 
 
 # %% Table simultation
-# index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
-Patient_table = [[1,  40, 163, 54, 0, 4.73, 24.97,  1.08,  0.30, 97.86, 89.62],
-                 [2,  36, 163, 50, 0, 4.43, 19.33,  1.16,  0.29, 89.10, 98.86],
-                 [3,  28, 164, 52, 0, 4.81, 16.89,  1.54,  0.14, 93.66, 94.],
-                 [4,  50, 163, 83, 0, 3.86, 20.97,  1.37,  0.12, 94.60, 93.2],
-                 [5,  28, 164, 60, 1, 5.22, 18.95,  1.21,  0.68, 97.43, 96.21],
-                 [6,  43, 163, 59, 0, 3.41, 23.26,  1.34,  0.58, 85.33, 97.07],
-                 [7,  37, 187, 75, 1, 4.83, 15.21,  1.84,  0.13, 91.87, 90.84],
-                 [8,  38, 174, 80, 0, 4.36, 13.86,  2.23,  1.05, 97.45, 96.36],
-                 [9,  41, 170, 70, 0, 2.97, 14.20,  1.89,  0.16, 85.83, 94.6],
-                 [10, 37, 167, 58, 0, 6.02, 23.47,  1.27,  0.77, 95.18, 88.17],
-                 [11, 42, 179, 78, 1, 3.79, 22.25,  2.35,  1.12, 98.02, 96.95],
-                 [12, 34, 172, 58, 0, 5.70, 18.64,  2.02,  0.40, 99.57, 96.94],
-                 [13, 38, 169, 65, 0, 4.64, 19.50,  1.43,  0.48, 93.82, 94.40]]
+Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 # Simulation parameters
 
-MPC_param = [30, 30, 10**(0.7)*np.diag([10, 1]), 0.015]
-EKF_param = [1, -1, 1]
-MMPC_param = [30, 0, 1, 0.01, 30]
+MPC_param = [30, 30, 10**(1.2)*np.diag([10, 1]), 0.02]
+EKF_param = [1, -1, -1]
+MMPC_param = [30, 0, 1, 0.05, 30]
 phase = 'induction'
 ts = 2
 
@@ -250,7 +222,7 @@ def one_simu(i):
     """Cost of one simulation, i is the patient index."""
     # Generate random patient information with uniform distribution
 
-    Patient_info = Patient_table[i-1][1:]
+    Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
 
     IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
     return [IAE, data, BIS_param, i]
@@ -272,9 +244,9 @@ p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
 p4 = figure(width=900, height=300)
 time_simulation = []
-for i in range(13):
-    print(i)
-    Patient_info = Patient_table[i][1:]
+for i in range(16):  # len(Patient_table)):
+    print(i+1)
+    Patient_info = Patient_table.loc[i].to_numpy()[1:]
     t0 = time.time()
     IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
     t1 = time.time()
@@ -283,20 +255,20 @@ for i in range(13):
     # data = result[i][1]
     # BIS_param = result[i][2]
 
-    # Xp_EKF = data[6]
-    # Xp = data[9]
-    # Xr_EKF = data[7]
-    # Xr = data[10]
-    # fig, axs = plt.subplots(8, figsize=(14, 16))
-    # for i in range(4):
-    #     axs[i].plot(Xp[i, :], '-')
-    #     axs[i].plot(Xp_EKF[i, :], '-')
-    #     axs[i].set(xlabel='t', ylabel='$xp_' + str(i+1) + '$')
-    #     plt.grid()
-    #     axs[i+4].plot(Xr[i, :], '-')
-    #     axs[i+4].plot(Xr_EKF[i, :], '-')
-    #     axs[i+4].set(xlabel='t', ylabel='$xr_' + str(i+1) + '$')
-    # plt.show()
+    Xp_EKF = data[6]
+    Xp = data[9]
+    Xr_EKF = data[7]
+    Xr = data[10]
+    fig, axs = plt.subplots(8, figsize=(14, 16))
+    for i in range(4):
+        axs[i].plot(Xp[i, :], '-')
+        axs[i].plot(Xp_EKF[i, :], '-')
+        axs[i].set(xlabel='t', ylabel='$xp_' + str(i+1) + '$')
+        plt.grid()
+        axs[i+4].plot(Xr[i, :], '-')
+        axs[i+4].plot(Xr_EKF[i, :], '-')
+        axs[i+4].set(xlabel='t', ylabel='$xr_' + str(i+1) + '$')
+    plt.show()
     source = pd.DataFrame(data=data[0], columns=['BIS'])
     source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
     source.insert(len(source.columns), "Ce50_P", BIS_param[0])
@@ -322,7 +294,7 @@ for i in range(13):
     p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
     p3.line(np.arange(0, len(data[8]))*ts/60, data[8], legend_label='Best model id')
-    p4.line(data[6][3], data[7][3])
+    p4.line(data[9][3], data[10][3])
     # TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
     #     data[0], Ts=ts, phase=phase)
     # TT_list.append(TT)

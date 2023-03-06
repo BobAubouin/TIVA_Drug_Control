@@ -18,7 +18,7 @@ import casadi as cas
 
 # Local imports
 from src.controller import PID
-from python_anesthesia_simulator import patient, disturbances, metrics
+import python_anesthesia_simulator as pas
 
 
 def simu(Patient_info: list, style: str, PID_param: list,
@@ -49,10 +49,6 @@ def simu(Patient_info: list, style: str, PID_param: list,
         BIS parameters of the simulated patient.
 
     """
-    age = Patient_info[0]
-    height = Patient_info[1]
-    weight = Patient_info[2]
-    gender = Patient_info[3]
     Ce50p = Patient_info[4]
     Ce50r = Patient_info[5]
     gamma = Patient_info[6]
@@ -60,11 +56,13 @@ def simu(Patient_info: list, style: str, PID_param: list,
     E0 = Patient_info[8]
     Emax = Patient_info[9]
 
-    BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
-    George = patient.Patient(age, height, weight, gender,
-                             BIS_param=BIS_param, Random_PK=random_PK,
-                             Random_PD=random_PD)
-    bis_params = George.BisPD.BIS_param
+    if not Ce50p:
+        BIS_param = None
+    else:
+        BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
+                         random_PD=random_PD, save_data=False)
+    bis_params = George.hill_param
     Ce50p = bis_params[0]
     Ce50r = bis_params[1]
     gamma = bis_params[2]
@@ -90,7 +88,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
         uP = 0
         uR = min(ur_max, max(0, uP * ratio))
         for i in range(N_simu):
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, noise=False)
+            Bis, Co, Map, _ = George.one_step(uP, uR, noise=False)
             BIS[i] = Bis
             MAP[i] = Map
             CO[i] = Co
@@ -113,8 +111,8 @@ def simu(Patient_info: list, style: str, PID_param: list,
         for i in range(N_simu):
             uR = min(ur_max, max(0, uP * ratio))
             uP = min(up_max, max(0, uP))
-            Dist = disturbances.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Dist = pas.disturbances.compute_disturbances(i * ts, 'realistic')
+            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
 
             BIS[i] = min(100, Bis)
             MAP[i] = Map[0, 0]
@@ -187,7 +185,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
             uR = min(ur_max, max(0, uP * ratio))
             uP = min(up_max, max(0, uP))
             Bis, Co, Map, _, _ = George.one_step(uP, uR, noise=False)
-            dist_bis, dist_map, dist_co = disturbances.compute_disturbances(i, 'step')
+            dist_bis, dist_map, dist_co = pas.disturbances.compute_disturbances(i, 'step')
             BIS[i] = min(100, Bis) + dist_bis
             MAP[i] = Map[0, 0] + dist_map
             CO[i] = Co[0, 0] + dist_co
@@ -196,25 +194,13 @@ def simu(Patient_info: list, style: str, PID_param: list,
             uP = PID_controller.one_step(BIS[i], BIS_cible)
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    return IAE, [BIS, MAP, CO, Up, Ur], George.BisPD.BIS_param
+    return IAE, [BIS, MAP, CO, Up, Ur], George.hill_param
 
 
 # %% PSO
 # Patient table:
 # index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
-Patient_table = [[1,  40, 163, 54, 0, 4.73, 24.97,  1.08,  0.30, 97.86, 89.62],
-                 [2,  36, 163, 50, 0, 4.43, 19.33,  1.16,  0.29, 89.10, 98.86],
-                 [3,  28, 164, 52, 0, 4.81, 16.89,  1.54,  0.14, 93.66, 94.],
-                 [4,  50, 163, 83, 0, 3.86, 20.97,  1.37,  0.12, 94.60, 93.2],
-                 [5,  28, 164, 60, 1, 5.22, 18.95,  1.21,  0.68, 97.43, 96.21],
-                 [6,  43, 163, 59, 0, 3.41, 23.26,  1.34,  0.58, 85.33, 97.07],
-                 [7,  37, 187, 75, 1, 4.83, 15.21,  1.84,  0.13, 91.87, 90.84],
-                 [8,  38, 174, 80, 0, 4.36, 13.86,  2.23,  1.05, 97.45, 96.36],
-                 [9,  41, 170, 70, 0, 2.97, 14.20,  1.89,  0.16, 85.83, 94.6],
-                 [10, 37, 167, 58, 0, 6.02, 23.47,  1.27,  0.77, 95.18, 88.17],
-                 [11, 42, 179, 78, 1, 3.79, 22.25,  2.35,  1.12, 98.02, 96.95],
-                 [12, 34, 172, 58, 0, 5.70, 18.64,  2.02,  0.40, 99.57, 96.94],
-                 [13, 38, 169, 65, 0, 4.64, 19.50,  1.43,  0.48, 93.82, 94.40]]
+Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 
 
 # phase = 'maintenance'
@@ -223,7 +209,7 @@ phase = 'induction'
 
 def one_simu(x, ratio, i):
     """Cost of one simulation, i is the patient index."""
-    Patient_info = Patient_table[i-1][1:]
+    Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
     iae, data, bis_param = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
     return iae
 
@@ -236,7 +222,7 @@ def cost(x, ratio):
     """
     pool_obj = multiprocessing.Pool()
     func = partial(one_simu, x, ratio)
-    IAE = pool_obj.map(func, range(0, 13))
+    IAE = pool_obj.map(func, range(1, 17))
     pool_obj.close()
     pool_obj.join()
 
@@ -252,8 +238,8 @@ except:
     param_opti = pd.DataFrame(columns=['ratio', 'Kp', 'Ti', 'Td'])
     for ratio in range(2, 3):
         def local_cost(x): return cost(x, ratio)
-        lb = [1e-6, 100, 10]
-        ub = [1, 300, 40]
+        lb = [1e-6, 100, 0.1]
+        ub = [1, 300, 20]
         # Default: 100 particles as in the article
         xopt, fopt = pso(local_cost, lb, ub, debug=True, minfunc=1e-2)
         param_opti = pd.concat((param_opti, pd.DataFrame(
@@ -265,61 +251,61 @@ except:
         param_opti.to_csv('./scripts/optimal_parameters_PID.csv')
 
 # %%test on patient table
-ts = 1
-IAE_list = []
-TT_list = []
-p1 = figure(width=900, height=300)
-p2 = figure(width=900, height=300)
-p3 = figure(width=900, height=300)
-for ratio in range(2, 3):
-    print('ratio = ' + str(ratio))
-    Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
-    Ti = float(param_opti.loc[param_opti['ratio'] == ratio, 'Ti'])
-    Td = float(param_opti.loc[param_opti['ratio'] == ratio, 'Td'])
-    PID_param = [Kp, Ti, Td, ratio]
-    for i in range(1, 14):
-        Patient_info = Patient_table[i-1][1:]
-        IAE, data, BIS_param = simu(Patient_info, phase, PID_param)
-        source = pd.DataFrame(data=data[0], columns=['BIS'])
-        source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
-        source.insert(len(source.columns), "Ce50_P", BIS_param[0])
-        source.insert(len(source.columns), "Ce50_R", BIS_param[1])
-        source.insert(len(source.columns), "gamma", BIS_param[2])
-        source.insert(len(source.columns), "beta", BIS_param[3])
-        source.insert(len(source.columns), "E0", BIS_param[4])
-        source.insert(len(source.columns), "Emax", BIS_param[5])
+# ts = 1
+# IAE_list = []
+# TT_list = []
+# p1 = figure(width=900, height=300)
+# p2 = figure(width=900, height=300)
+# p3 = figure(width=900, height=300)
+# for ratio in range(2, 3):
+#     print('ratio = ' + str(ratio))
+#     Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
+#     Ti = float(param_opti.loc[param_opti['ratio'] == ratio, 'Ti'])
+#     Td = float(param_opti.loc[param_opti['ratio'] == ratio, 'Td'])
+#     PID_param = [Kp, Ti, Td, ratio]
+#     for i in range(1, 14):
+#         Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
+#         IAE, data, BIS_param = simu(Patient_info, phase, PID_param)
+#         source = pd.DataFrame(data=data[0], columns=['BIS'])
+#         source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
+#         source.insert(len(source.columns), "Ce50_P", BIS_param[0])
+#         source.insert(len(source.columns), "Ce50_R", BIS_param[1])
+#         source.insert(len(source.columns), "gamma", BIS_param[2])
+#         source.insert(len(source.columns), "beta", BIS_param[3])
+#         source.insert(len(source.columns), "E0", BIS_param[4])
+#         source.insert(len(source.columns), "Emax", BIS_param[5])
 
-        plot = p1.line(x='time', y='BIS', source=source)
-        tooltips = [('Ce50_P', "@Ce50_P"), ('Ce50_R', "@Ce50_R"),
-                    ('gamma', "@gamma"), ('beta', "@beta"),
-                    ('E0', "@E0"), ('Emax', "@Emax")]
-        p1.add_tools(HoverTool(renderers=[plot], tooltips=tooltips))
-        p2.line(np.arange(0, len(data[0]))*ts/60,
-                data[1], legend_label='MAP (mmgh)')
-        p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
-                legend_label='CO (cL/min)', line_color="#f46d43")
-        p3.line(np.arange(0, len(data[3]))*ts/60, data[3],
-                line_color="#006d43", legend_label='propofol (mg/min)')
-        p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
-                line_color="#f46d43", legend_label='remifentanil (ng/min)')
-        if phase == 'induction':
-            TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
-            TT_list.append(TT)
-        else:
-            TTp, BIS_NADIRp, TTn, BIS_NADIRn = metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
-            TT_list.append(TTp)
-        IAE_list.append(IAE)
-p1.title.text = 'BIS'
-p3.title.text = 'Infusion rates'
-p3.xaxis.axis_label = 'Time (min)'
-grid = row(column(p3, p1, p2))
+#         plot = p1.line(x='time', y='BIS', source=source)
+#         tooltips = [('Ce50_P', "@Ce50_P"), ('Ce50_R', "@Ce50_R"),
+#                     ('gamma', "@gamma"), ('beta', "@beta"),
+#                     ('E0', "@E0"), ('Emax', "@Emax")]
+#         p1.add_tools(HoverTool(renderers=[plot], tooltips=tooltips))
+#         p2.line(np.arange(0, len(data[0]))*ts/60,
+#                 data[1], legend_label='MAP (mmgh)')
+#         p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
+#                 legend_label='CO (cL/min)', line_color="#f46d43")
+#         p3.line(np.arange(0, len(data[3]))*ts/60, data[3],
+#                 line_color="#006d43", legend_label='propofol (mg/min)')
+#         p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
+#                 line_color="#f46d43", legend_label='remifentanil (ng/min)')
+#         if phase == 'induction':
+#             TT, BIS_NADIR, ST10, ST20, US = pas.metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
+#             TT_list.append(TT)
+#         else:
+#             TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
+#             TT_list.append(TTp)
+#         IAE_list.append(IAE)
+# p1.title.text = 'BIS'
+# p3.title.text = 'Infusion rates'
+# p3.xaxis.axis_label = 'Time (min)'
+# grid = row(column(p3, p1, p2))
 
-show(grid)
+# show(grid)
 
-print("Mean IAE : " + str(np.mean(IAE_list)))
-print("Mean TT : " + str(np.mean(TT_list)))
-print("Min TT : " + str(np.min(TT_list)))
-print("Max TT : " + str(np.max(TT_list)))
+# print("Mean IAE : " + str(np.mean(IAE_list)))
+# print("Mean TT : " + str(np.mean(TT_list)))
+# print("Min TT : " + str(np.min(TT_list)))
+# print("Max TT : " + str(np.max(TT_list)))
 
 # %% Intra patient variability
 
@@ -336,21 +322,36 @@ PID_param = [Kp, Ti, Td, ratio]
 
 
 df = pd.DataFrame()
+pd_param = pd.DataFrame()
 name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
 for i in range(Number_of_patient):
+    print(i)
     np.random.seed(i)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
     height = np.random.randint(low=150, high=190)
     weight = np.random.randint(low=50, high=100)
-    gender = np.random.randint(low=0, high=1)
+    gender = np.random.randint(low=0, high=2)
 
     Patient_info = [age, height, weight, gender] + [None] * 6
     IAE, data, bis_param = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
+    dico = {'age': [age],
+            'height': [height],
+            'weight': [weight],
+            'gender': [gender],
+            'C50p': [bis_param[0]],
+            'C50r': [bis_param[1]],
+            'gamma': [bis_param[2]],
+            'beta': [bis_param[3]],
+            'Emax': [bis_param[4]],
+            'E0': [bis_param[5]]}
+    pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
 
 if phase == 'maintenance':
     df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
 else:
     df.to_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
+
+pd_param.hist(density=True)

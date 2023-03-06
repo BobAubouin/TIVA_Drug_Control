@@ -16,14 +16,14 @@ from bokeh.io import export_svg
 from python_anesthesia_simulator import metrics
 
 
-Number_of_patient = 128
+Number_of_patient = 500
 phase = 'induction'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
 # title = '_NMPC'
-# title = '_multi_NMPC'
+title = '_multi_NMPC'
 # title = '_MPC_lin'
-title = '_PID'
+# title = '_PID'
 
 if title == '_PID':
     ts = 1
@@ -49,7 +49,7 @@ p1 = figure(width=900, height=300)
 p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
 
-for i in range(Number_of_patient):
+for i in range(Number_of_patient):  # Number_of_patient
     # for i in range(108, 109):
     print(i)
 

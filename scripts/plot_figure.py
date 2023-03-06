@@ -24,28 +24,39 @@ Number_of_patient = 500
 phase = 'induction'
 
 
-Patient_id = 108
-
-
 Data_PID = pd.read_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
 Data_MMPC = pd.read_csv("./Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
 Data_NMPC = pd.read_csv("./Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
 
-BIS_PID = Data_PID[str(Patient_id)+'_BIS']
-BIS_NMPC = Data_NMPC[str(Patient_id)+'_BIS']
-BIS_MMPC = Data_MMPC[str(Patient_id)+'_BIS']
+# find Patient with minimum BIS for MMPC controller
+Patient_id_min_PID = 0
+Patient_id_min_NMPC = 0
+Patient_id_min_MMPC = 0
+for patient_id in range(1, Number_of_patient):
+    if np.min(Data_PID[str(patient_id)+'_BIS']) < np.min(Data_PID[str(Patient_id_min_PID)+'_BIS']):
+        Patient_id_min_PID = patient_id
+
+    if np.min(Data_NMPC[str(patient_id)+'_BIS']) < np.min(Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']):
+        Patient_id_min_NMPC = patient_id
+
+    if np.min(Data_MMPC[str(patient_id)+'_BIS']) < np.min(Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']):
+        Patient_id_min_MMPC = patient_id
+
+BIS_PID = Data_PID[str(Patient_id_min_PID)+'_BIS']
+BIS_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']
+BIS_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']
 
 ts_PID = 1
 ts_MPC = 2
 Time_PID = np.arange(0, len(BIS_PID)) * ts_PID / 60
 Time_MPC = np.arange(0, len(BIS_NMPC)) * ts_MPC / 60
 
-Up_PID = Data_PID[str(Patient_id)+'_Up']
-Ur_PID = Data_PID[str(Patient_id)+'_Ur']
-Up_NMPC = Data_NMPC[str(Patient_id)+'_Up']
-Ur_NMPC = Data_NMPC[str(Patient_id)+'_Ur']
-Up_MMPC = Data_MMPC[str(Patient_id)+'_Up']
-Ur_MMPC = Data_MMPC[str(Patient_id)+'_Ur']
+Up_PID = Data_PID[str(Patient_id_min_PID)+'_Up']
+Ur_PID = Data_PID[str(Patient_id_min_PID)+'_Ur']
+Up_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Up']
+Ur_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Ur']
+Up_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Up']
+Ur_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Ur']
 
 
 # %% Create BIS figure
@@ -57,18 +68,18 @@ ax.plot(Time_MPC, BIS_MMPC, label='MMPC')
 ax.grid(linewidth=0.4)
 ax.legend(fontsize=13)
 
-ax.set_yticks(list(ax.get_yticks()) + [int(BIS_PID[0])])
-ax.set_ylim([23, 97])
+# ax.set_yticks(list(ax.get_yticks()) + [int(BIS_PID[0])])
+ax.set_ylim([16, 102])
 ax.set_xlim([-0.2, 10.2])
 ax.set_xlabel('Time (min)', fontsize=13)
 ax.set_ylabel('BIS', fontsize=13)
-ygridlines = ax.get_ygridlines()
-gridline_of_interest = ygridlines[-1]
-gridline_of_interest.set_visible(False)
+# ygridlines = ax.get_ygridlines()
+# gridline_of_interest = ygridlines[-1]
+# gridline_of_interest.set_visible(False)
 plt.draw()
 
 # save it
-savepath = "./Results_Images/BIS_case="+str(Patient_id) + ".pdf"
+savepath = "./Results_Images/worst_bis.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -122,7 +133,7 @@ plt.draw()
 # plt.draw()
 
 # save it
-savepath = "./Results_Images/Rates_case="+str(Patient_id) + ".pdf"
+savepath = "./Results_Images/worst_bis_inputs.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -149,6 +160,20 @@ plt.fill_between(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, mean_BIS_NMPC+std_BIS_NMP
 
 plt.fill_between(Time_PID, mean_BIS_PID-std_BIS_PID, mean_BIS_PID+std_BIS_PID,
                  alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:blue'])  # , hatch="////")
+
+plt.plot(Time_PID, mean_BIS_PID-std_BIS_PID, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
+plt.plot(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
+plt.plot(Time_MPC, mean_BIS_MMPC-std_BIS_MMPC, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
+
+plt.plot(Time_PID, mean_BIS_PID+std_BIS_PID, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
+plt.plot(Time_MPC, mean_BIS_NMPC+std_BIS_NMPC, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
+plt.plot(Time_MPC, mean_BIS_MMPC+std_BIS_MMPC, linestyle='--',
+         color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
 
 plt.plot(Time_PID, mean_BIS_PID, label='PID', color=mcolors.TABLEAU_COLORS['tab:blue'])
 plt.plot(Time_MPC, mean_BIS_NMPC, label='NMPC', color=mcolors.TABLEAU_COLORS['tab:orange'])

@@ -16,7 +16,7 @@ from filterpy.common import Q_continuous_white_noise
 # Local imports
 from src.estimators import EKF
 from src.controller import NMPC
-from python_anesthesia_simulator import patient, disturbances
+import python_anesthesia_simulator as pas
 
 
 def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
@@ -50,10 +50,6 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         BIS parameters of the simulated patient.
 
     """
-    age = Patient_info[0]
-    height = Patient_info[1]
-    weight = Patient_info[2]
-    gender = Patient_info[3]
     Ce50p = Patient_info[4]
     Ce50r = Patient_info[5]
     gamma = Patient_info[6]
@@ -63,18 +59,21 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
 
     ts = 2
 
-    BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
-    George = patient.Patient(age, height, weight, gender, BIS_param=BIS_param,
-                             Random_PK=random_PK, Random_PD=random_PD, Ts=ts)
+    if not Ce50p:
+        BIS_param = None
+    else:
+        BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
+                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
     # Nominal parameters
-    George_nominal = patient.Patient(age, height, weight, gender, BIS_param=[None] * 6, Ts=ts)
-    BIS_param_nominal = George_nominal.BisPD.BIS_param
-    BIS_param_nominal[4] = George.BisPD.BIS_param[4]
+    George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
+    BIS_param_nominal = George_nominal.hill_param
+    BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.PropoPK.A
-    Ar = George_nominal.RemiPK.A
-    Bp = George_nominal.PropoPK.B
-    Br = George_nominal.RemiPK.B
+    Ap = George_nominal.propo_pk.continuous_sys.A
+    Ar = George_nominal.remi_pk.continuous_sys.A
+    Bp = George_nominal.propo_pk.continuous_sys.B
+    Br = George_nominal.remi_pk.continuous_sys.B
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
@@ -116,10 +115,10 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         uR = 1e-3
         for i in range(N_simu):
 
-            Dist = disturbances.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.PropoPK.x.T[0]
-            Xr[:, i] = George.RemiPK.x.T[0]
+            Dist = pas.compute_disturbances(i * ts, 'null')
+            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x
+            Xr[:, i] = George.remi_pk.x
 
             BIS[i] = Bis
             MAP[i] = Map
@@ -131,7 +130,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
             Xp_EKF[:, i] = X[:4]
             Xr_EKF[:, i] = X[4:]
             # X_MPC = np.concatenate((Xp[:,i],Xr[:,i]),axis = 0)
-            if i == 20:  # or (BIS_EKF[i]<50 and MPC_controller.ki==0):
+            if i == 90:  # or (BIS_EKF[i]<50 and MPC_controller.ki==0):
                 MPC_controller.ki = ki_mpc
                 BIS_cible = 50
             X = np.clip(X, a_min=0, a_max=1e10)
@@ -154,7 +153,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         uR = 1
         for i in range(N_simu):
 
-            Dist = disturbances.compute_disturbances(i * ts, 'realistic')
+            Dist = pas.compute_disturbances(i * ts, 'realistic')
             Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=True)
             Xp[:, i] = George.PropoPK.x.T[0]
             Xr[:, i] = George.RemiPK.x.T[0]
@@ -174,14 +173,14 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
     IAE = np.sum(np.abs(error))
 
     return (IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF],
-            George.BisPD.BIS_param)
+            George.hill_param)
 
 
 # %% Inter patient variability
 # Simulation parameter
 phase = 'induction'
-Number_of_patient = 10
-MPC_param = [30, 30, 10**(0.65)*np.diag([10, 1]), 0.02]
+Number_of_patient = 500
+MPC_param = [30, 30, 10**(1)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, 1]
 
 
