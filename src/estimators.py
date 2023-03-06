@@ -29,7 +29,7 @@ def discretize(A: list, B: list, ts: float) -> (list, list):
     Mt = np.zeros((n+m, n+m))
     Mt[0:n, 0:n] = A
     Mt[0:n, n:n+m] = B
-    Mtd = expm(Mt*ts/60)
+    Mtd = expm(Mt*ts)
     Ad = Mtd[0:n, 0:n]
     Bd = Mtd[0:n, n:n+m]
     return Ad, Bd
@@ -186,9 +186,9 @@ class EKF:
         self.bis_pred = bis - self.error
         self.S = self.Updatek['S']
 
-        self.x[3] = max(1e-3, self.x[3])
-        self.x[7] = max(1e-3, self.x[7])
-
+        # self.x[3] = max(1e-3, self.x[3])
+        # self.x[7] = max(1e-3, self.x[7])
+        self.x = np.clip(self.x, a_min=1e-3, a_max=None)
         self.Bis = BIS(self.x[3], self.x[7], self.BIS_param)
 
         return self.x, self.Bis
@@ -220,5 +220,36 @@ class EKF:
             x = self.Ad @ x + self.Bd @ u
             bis = self.output(x=x)
             BIS_list.append(float(bis['bis']))
+
+        return np.array(BIS_list)
+
+    def find_from_state(self, x: list, up: list, ur: list) -> list:
+        """
+        Return the BIS prediction using the given initial state and the control input.
+
+        Parameters
+        ----------
+        x : list
+            Initial state vector of the interval.
+        up : list
+            Propofol rates over the interval.
+        ur : list
+            Remifentanil rates over the interval.
+
+        Returns
+        -------
+        BIS_list: list
+            BIS value predicted by the model over the interval.
+
+        """
+        invA = np.linalg.inv(self.Ad)
+        bis = self.output(x=x)
+        BIS_list = [float(bis['bis'])]
+        x = np.expand_dims(x, axis=1)
+        for i in range(len(up)):
+            u = np.array([[up[len(up)-i-1]], [ur[len(up)-i-1]]])
+            x = invA @ (x - self.Bd @ u)
+            bis = self.output(x=x)
+            BIS_list = [float(bis['bis'])] + BIS_list
 
         return np.array(BIS_list)

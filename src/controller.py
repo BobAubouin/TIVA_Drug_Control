@@ -30,7 +30,7 @@ def discretize(A: list, B: list, ts: float) -> (list, list):
     Mt = np.zeros((n+m, n+m))
     Mt[0:n, 0:n] = A
     Mt[0:n, n:n+m] = B
-    Mtd = expm(Mt*ts/60)
+    Mtd = expm(Mt*ts)
     Ad = Mtd[0:n, 0:n]
     Bd = Mtd[0:n, n:n+m]
     return Ad, Bd
@@ -246,7 +246,7 @@ class NMPC:
 
             # J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) + Ju
 
-            J += (bis - Bis_target)**2 + ((U).T @ self.R @ (U))**2
+            J += (bis - Bis_target)**2 + (U).T @ self.R @ (U)
             # if k == self.N-1:
             #     J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) * 1e3
 
@@ -423,7 +423,7 @@ class MMPC():
         if np.sum(self.BIS) == 0:
             self.BIS = np.ones(self.window_length)*BIS
         else:
-            self.BIS = np.concatenate((self.BIS[1:], np.array([BIS])), axis=0)
+            self.BIS = np.concatenate((self.BIS[1:], BIS), axis=0)
 
         for idx in range(self.N_model):
             self.estimator_list[idx].estimate(U_prec, BIS)  # update the estimators
@@ -431,6 +431,7 @@ class MMPC():
                 self.estimator_list[idx].x, axis=1).T), axis=0)
             # compute the prediction error
             bis_pred = self.estimator_list[idx].predict_from_state(x=self.X[idx, 0], up=self.Up, ur=self.Ur)
+            # bis_pred = self.estimator_list[idx].find_from_state(x=self.estimator_list[idx].x, up=self.Up, ur=self.Ur)
 
             epsilon = np.square(bis_pred - self.BIS)
             integral = self.ts * np.sum([np.exp(- self.lambda_p * (self.window_length - i)*self.ts) * epsilon[i]
