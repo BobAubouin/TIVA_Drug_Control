@@ -91,7 +91,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     w_gamma = np.sqrt(np.log(1+cv_gamma**2))
 
     c50p_list = BIS_param_nominal[0]*np.exp([-2*w_c50p, 0, w_c50p])
-    c50r_list = BIS_param_nominal[1]*np.exp([-3*w_c50r, -1*w_c50r, 0, w_c50r])
+    c50r_list = BIS_param_nominal[1]*np.exp([-3*w_c50r, -2*w_c50r, -1*w_c50r, 0, w_c50r])
     gamma_list = BIS_param_nominal[2]*np.exp([-2*w_gamma, 0, w_gamma])
     BIS_parameters = []
     for c50p in c50p_list:
@@ -196,8 +196,8 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             uR = U[1]
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    print(np.array(BIS_parameters[best_model]).round(3))
-    print(np.array(George.hill_param).round(3))
+    # print(np.array(BIS_parameters[best_model]).round(3))
+    # print(np.array(George.hill_param).round(3))
     return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr], George.hill_param)
 
 
@@ -207,7 +207,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
 # Simulation parameter
 phase = 'induction'
 Number_of_patient = 500
-MPC_param = [30, 30, 10**(1.2)*np.diag([10, 1]), 0.02]
+MPC_param = [30, 30, 10**(0.55)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, -1]
 MMPC_param = [30, 0, 1, 0.05, 30]
 

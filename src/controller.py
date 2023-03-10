@@ -246,7 +246,7 @@ class NMPC:
 
             # J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) + Ju
 
-            J += (bis - Bis_target)**2 + (U).T @ self.R @ (U)
+            J += (bis - Bis_target)**2 + ((U).T @ self.R @ (U))**2
             # if k == self.N-1:
             #     J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) * 1e3
 

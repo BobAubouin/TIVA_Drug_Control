@@ -20,7 +20,7 @@ Number_of_patient = 500
 phase = 'induction'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
-# title = '_NMPC'
+title = '_NMPC'
 title = '_multi_NMPC'
 # title = '_MPC_lin'
 # title = '_PID'

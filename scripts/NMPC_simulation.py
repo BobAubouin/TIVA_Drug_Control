@@ -180,14 +180,15 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
 # Simulation parameter
 phase = 'induction'
 Number_of_patient = 500
-MPC_param = [30, 30, 10**(1)*np.diag([10, 1]), 0.02]
-EKF_param = [1, -1, 1]
+MPC_param = [30, 30, 10**(0.6)*np.diag([10, 1]), 0.02]
+EKF_param = [1, -1, -1]
 
 
 def one_simu(i):
     """Cost of one simulation, i is the patient index."""
     # Generate random patient information with uniform distribution
     np.random.seed(i)
+    print(i)
     age = np.random.randint(low=18, high=70)
     height = np.random.randint(low=150, high=190)
     weight = np.random.randint(low=50, high=100)

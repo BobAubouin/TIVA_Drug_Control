@@ -211,7 +211,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
 Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 # Simulation parameters
 
-MPC_param = [30, 30, 10**(1.2)*np.diag([10, 1]), 0.02]
+MPC_param = [30, 30, 10**(0.6)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, -1]
 MMPC_param = [30, 0, 1, 0.05, 30]
 phase = 'induction'
@@ -283,8 +283,8 @@ for i in range(16):  # len(Patient_table)):
                 ('gamma', "@gamma"), ('beta', "@beta"),
                 ('E0', "@E0"), ('Emax', "@Emax")]
     p1.add_tools(HoverTool(renderers=[plot], tooltips=tooltips))
-    p1.line(np.arange(0, len(data[0])-1)*ts/60, data[5][0:-1],
-            legend_label='internal target', line_color="#f46d43")
+    # p1.line(np.arange(0, len(data[0])-1)*ts/60, data[5][0:-1],
+    #         legend_label='internal target', line_color="#f46d43")
     p2.line(np.arange(0, len(data[0]))*ts/60,
             data[1], legend_label='MAP (mmgh)')
     p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
@@ -295,12 +295,12 @@ for i in range(16):  # len(Patient_table)):
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
     p3.line(np.arange(0, len(data[8]))*ts/60, data[8], legend_label='Best model id')
     p4.line(data[9][3], data[10][3])
-    # TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
-    #     data[0], Ts=ts, phase=phase)
-    # TT_list.append(TT)
-    # ST10_list.append(ST10)
-    # IAE_list.append(IAE)
+    TT, BIS_NADIR, ST10, ST20, US = pas.compute_control_metrics(data[0], Ts=ts, phase=phase)
+    TT_list.append(TT)
+    ST10_list.append(ST10)
+    IAE_list.append(IAE)
 
+print('Mean TT:' + str(np.mean(TT_list)) + 's')
 print(np.mean(time_simulation)/len(data[0]))
 p1.title.text = 'BIS'
 p3.title.text = 'Infusion rates'
