@@ -97,7 +97,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     w_gamma = np.sqrt(np.log(1+cv_gamma**2))
 
     c50p_list = BIS_param_nominal[0]*np.exp([-2*w_c50p, 0, w_c50p])
-    c50r_list = BIS_param_nominal[1]*np.exp([-3*w_c50r, -1*w_c50r, 0, w_c50r])
+    c50r_list = BIS_param_nominal[1]*np.exp([-3*w_c50r, -2*w_c50r, -1*w_c50r, 0, w_c50r])
     gamma_list = BIS_param_nominal[2]*np.exp([-2*w_gamma, 0, w_gamma])
     BIS_parameters = []
     for c50p in c50p_list:
@@ -153,6 +153,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         Xr_EKF = np.zeros((4, N_simu))
         uP = 1e-3
         uR = 1e-3
+        step_time_max = 0
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'null')
@@ -169,7 +170,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
                 # MMPC.controller.ki = ki_mpc
                 for j in range(model_number):
                     Controller.controller_list[j].ki = ki_mpc
+            start = time.perf_counter()
             U, best_model = Controller.one_step([uP, uR], Bis)
+            end = time.perf_counter()
             Xp_EKF[:, i] = Estimator_list[13].x[:4]
             Xr_EKF[:, i] = Estimator_list[13].x[4:]
             best_model_id[i] = best_model
@@ -177,7 +180,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             uR = U[1]
             Up[i] = uP
             Ur[i] = uR
-
+            step_time_max = max(step_time_max, end - start)
     elif style == 'total':
         N_simu = int(30 / ts) * 60
         BIS_cible_MPC = np.zeros(N_simu)
@@ -204,14 +207,14 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     IAE = np.sum(np.abs(BIS - BIS_cible))
     print(np.array(BIS_parameters[best_model]).round(3))
     print(np.array(George.hill_param).round(3))
-    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr], George.hill_param)
+    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
 
 
 # %% Table simultation
 Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 # Simulation parameters
 
-MPC_param = [30, 30, 10**(0.6)*np.diag([10, 1]), 0.02]
+MPC_param = [30, 30, 10**(0.55)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, -1]
 MMPC_param = [30, 0, 1, 0.05, 30]
 phase = 'induction'
@@ -244,13 +247,12 @@ p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
 p4 = figure(width=900, height=300)
 time_simulation = []
+step_time_max = 0
 for i in range(16):  # len(Patient_table)):
     print(i+1)
     Patient_info = Patient_table.loc[i].to_numpy()[1:]
-    t0 = time.time()
     IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
-    t1 = time.time()
-    time_simulation.append(t1-t0)
+    step_time_max = max(step_time_max, data[-1])
     # IAE = result[i][0]
     # data = result[i][1]
     # BIS_param = result[i][2]
@@ -300,8 +302,8 @@ for i in range(16):  # len(Patient_table)):
     ST10_list.append(ST10)
     IAE_list.append(IAE)
 
-print('Mean TT:' + str(np.mean(TT_list)) + 's')
-print(np.mean(time_simulation)/len(data[0]))
+print(f"Mean TT: {np.mean(TT_list)} s")
+print(f"maximum step time: {step_time_max}")
 p1.title.text = 'BIS'
 p3.title.text = 'Infusion rates'
 p1.xaxis.axis_label = 'Time (min)'
