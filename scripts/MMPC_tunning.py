@@ -20,13 +20,13 @@ from bokeh.models import HoverTool
 import matplotlib.pyplot as plt
 
 # Local imports
-from src.estimators import EKF
-from src.controller import NMPC, MMPC
+from estimators import EKF
+from controller import NMPC, MMPC
 import python_anesthesia_simulator as pas
 
 
 def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_param: list,
-         random_PK: bool = False, random_PD: bool = False) -> (float, list, list):
+         random_PK: bool = False, random_PD: bool = False) -> tuple[float, list, list]:
     """
     Simu function perform a closed-loop Propofol-Remifentanil to BIS anesthesia.
 
@@ -72,18 +72,18 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     else:
         BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
         # BIS_param = [3.5, 19.3, 1.43, 0, 97.4, 97.4]
-    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
-                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
+                         random_PD=random_PD, ts=ts, save_data_bool=False)
 
     # Nominal parameters
     George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
     BIS_param_nominal = George_nominal.hill_param
     # BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A
-    Ar = George_nominal.remi_pk.continuous_sys.A
-    Bp = George_nominal.propo_pk.continuous_sys.B
-    Br = George_nominal.remi_pk.continuous_sys.B
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Bp = George_nominal.propo_pk.continuous_sys.B[:4]
+    Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
@@ -157,9 +157,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.propo_pk.x
-            Xr[:, i] = George.remi_pk.x
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
             BIS[i] = Bis
             MAP[i] = Map
             CO[i] = Co
@@ -192,7 +192,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i*ts, 'step')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
             if i == N_simu - 1:
                 break
             # control
@@ -205,13 +205,15 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             uR = U[1]
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
+    print("Estimated paramaters:")
     print(np.array(BIS_parameters[best_model]).round(3))
+    print("Real paramaters:")
     print(np.array(George.hill_param).round(3))
     return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
 
 
 # %% Table simultation
-Patient_table = pd.read_csv('./scripts/Patient_table.csv')
+Patient_table = pd.read_csv('./Patient_table.csv')
 # Simulation parameters
 
 MPC_param = [30, 30, 10**(0.55)*np.diag([10, 1]), 0.02]
@@ -297,7 +299,7 @@ for i in range(16):  # len(Patient_table)):
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
     p3.line(np.arange(0, len(data[8]))*ts/60, data[8], legend_label='Best model id')
     p4.line(data[9][3], data[10][3])
-    TT, BIS_NADIR, ST10, ST20, US = pas.compute_control_metrics(data[0], Ts=ts, phase=phase)
+    TT, BIS_NADIR, ST10, ST20, US = pas.compute_control_metrics(np.arange(0, len(data[8]))*ts, data[0], phase=phase)
     TT_list.append(TT)
     ST10_list.append(ST10)
     IAE_list.append(IAE)

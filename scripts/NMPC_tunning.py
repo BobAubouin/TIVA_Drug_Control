@@ -19,8 +19,8 @@ from bokeh.models import HoverTool
 import matplotlib.pyplot as plt
 
 # Local imports
-from src.estimators import EKF
-from src.controller import NMPC
+from estimators import EKF
+from controller import NMPC
 import python_anesthesia_simulator as pas
 
 
@@ -68,17 +68,17 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         BIS_param = None
     else:
         BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
-    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
-                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
+                         random_PD=random_PD, ts=ts, save_data_bool=False)
     # Nominal parameters
     George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
     BIS_param_nominal = George_nominal.hill_param
     BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A
-    Ar = George_nominal.remi_pk.continuous_sys.A
-    Bp = George_nominal.propo_pk.continuous_sys.B
-    Br = George_nominal.remi_pk.continuous_sys.B
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Bp = George_nominal.propo_pk.continuous_sys.B[:4]
+    Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
@@ -121,9 +121,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.propo_pk.x
-            Xr[:, i] = George.remi_pk.x
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
 
             BIS[i] = Bis
             MAP[i] = Map
@@ -159,9 +159,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=True)
-            Xp[:, i] = George.PropoPK.x.T[0]
-            Xr[:, i] = George.RemiPK.x.T[0]
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, dist=Dist, noise=True)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
 
             BIS[i] = Bis
             MAP[i] = Map
@@ -182,7 +182,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
 
 
 # %% Table simultation
-Patient_table = pd.read_csv('./scripts/Patient_table.csv')
+Patient_table = pd.read_csv('./Patient_table.csv')
 # Simulation parameters
 
 MPC_param = [30, 30, 10**(1)*np.diag([10, 1]), 0.02]
@@ -263,11 +263,6 @@ for i in range(len(Patient_table)):
     p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
     p4.line(data[6][3], data[7][3])
-    # TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
-    #     data[0], Ts=ts, phase=phase)
-    # TT_list.append(TT)
-    # ST10_list.append(ST10)
-    # IAE_list.append(IAE)
 
 
 p1.title.text = 'BIS'

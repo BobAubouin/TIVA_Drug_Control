@@ -14,13 +14,13 @@ from scipy.linalg import block_diag
 from filterpy.common import Q_continuous_white_noise
 
 # Local imports
-from src.estimators import EKF
-from src.controller import NMPC, MMPC
+from estimators import EKF
+from controller import NMPC, MMPC
 import python_anesthesia_simulator as pas
 
 
 def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_param: list,
-         random_PK: bool = False, random_PD: bool = False) -> (float, list, list):
+         random_PK: bool = False, random_PD: bool = False) -> tuple[float, list, list]:
     """
     Simu function perform a closed-loop Propofol-Remifentanil to BIS anesthesia.
 
@@ -66,18 +66,18 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     else:
         BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
         # BIS_param = [3.5, 19.3, 1.43, 0, 97.4, 97.4]
-    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
-                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
+                         random_PD=random_PD, ts=ts, save_data_bool=False)
 
     # Nominal parameters
     George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
     BIS_param_nominal = George_nominal.hill_param
     # BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A
-    Ar = George_nominal.remi_pk.continuous_sys.A
-    Bp = George_nominal.propo_pk.continuous_sys.B
-    Br = George_nominal.remi_pk.continuous_sys.B
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Bp = George_nominal.propo_pk.continuous_sys.B[:4]
+    Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
@@ -147,12 +147,13 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         Xr_EKF = np.zeros((4, N_simu))
         uP = 1e-3
         uR = 1e-3
+        step_time_max = 0
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.propo_pk.x
-            Xr[:, i] = George.remi_pk.x
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
             BIS[i] = Bis
             MAP[i] = Map
             CO[i] = Co
@@ -163,7 +164,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
                 # MMPC.controller.ki = ki_mpc
                 for j in range(model_number):
                     Controller.controller_list[j].ki = ki_mpc
+            start = time.perf_counter()
             U, best_model = Controller.one_step([uP, uR], Bis)
+            end = time.perf_counter()
             Xp_EKF[:, i] = Estimator_list[13].x[:4]
             Xr_EKF[:, i] = Estimator_list[13].x[4:]
             best_model_id[i] = best_model
@@ -171,7 +174,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             uR = U[1]
             Up[i] = uP
             Ur[i] = uR
-
+            step_time_max = max(step_time_max, end - start)
     elif style == 'total':
         N_simu = int(30 / ts) * 60
         BIS_cible_MPC = np.zeros(N_simu)
@@ -183,7 +186,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i*ts, 'step')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
             if i == N_simu - 1:
                 break
             # control
@@ -196,10 +199,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             uR = U[1]
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    # print(np.array(BIS_parameters[best_model]).round(3))
-    # print(np.array(George.hill_param).round(3))
-    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr], George.hill_param)
-
+    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
 
 # %% Inter patient variability
 
@@ -244,7 +244,7 @@ for i in range(Number_of_patient):
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-df.to_csv("./Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
+df.to_csv("../Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
 t1 = time.time()
 
 print(t1 - t0)

@@ -1,9 +1,14 @@
-"""MISO PID control of anesthesia from "Individualized PID tuning for maintenance of general anesthesia with
-propofol and remifentanil coadministration" Michele Schiavo, Fabrizio Padula, Nicola Latronico, 
-Massimiliano Paltenghi,Antonio Visioli 2022"""
+"""MISO PID control of anesthesia.
+
+from L. Merigo, F. Padula, N. Latronico, M. Paltenghi, and A. Visioli, 
+“Optimized PID control of propofol and remifentanil coadministration for general anesthesia,”
+Communications in Nonlinear Science and Numerical Simulation
+, vol. 72, pp. 194–212, Jun. 2019, doi: 10.1016/j.cnsns.2018.12.015.
+"""
+
+# %% import packages
 
 # Standard import
-import time
 import multiprocessing
 from functools import partial
 
@@ -17,12 +22,13 @@ from pyswarm import pso
 import casadi as cas
 
 # Local imports
-from src.controller import PID
+from controller import PID
 import python_anesthesia_simulator as pas
 
+#%% Define the simulation function
 
 def simu(Patient_info: list, style: str, PID_param: list,
-         random_PK: bool = False, random_PD: bool = False) -> (float, list, list):
+         random_PK: bool = False, random_PD: bool = False) -> tuple[float, list, list]:
     """
     Perform a closed-loop Propofol-Remifentanil anesthesia simulation with a PID controller.
 
@@ -61,7 +67,8 @@ def simu(Patient_info: list, style: str, PID_param: list,
     else:
         BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
     George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
-                         random_PD=random_PD, save_data=False)
+                         random_PD=random_PD, save_data_bool=False)
+
     bis_params = George.hill_param
     Ce50p = bis_params[0]
     Ce50r = bis_params[1]
@@ -71,7 +78,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
     Emax = bis_params[5]
 
     ts = 1
-    BIS_cible = 50
+    BIS_target = 50
     up_max = 6.67
     ur_max = 16.67
     ratio = PID_param[3]
@@ -94,7 +101,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
             CO[i] = Co
             if i == N_simu - 1:
                 break
-            uP = PID_controller.one_step(Bis, BIS_cible)
+            uP = PID_controller.one_step(Bis, BIS_target)
             uR = min(ur_max, max(0, uP * ratio))
             uP = min(up_max, max(0, uP))
             Up[i] = uP
@@ -112,14 +119,14 @@ def simu(Patient_info: list, style: str, PID_param: list,
             uR = min(ur_max, max(0, uP * ratio))
             uP = min(up_max, max(0, uP))
             Dist = pas.disturbances.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
 
             BIS[i] = min(100, Bis)
             MAP[i] = Map[0, 0]
             CO[i] = Co[0, 0]
             Up[i] = uP
             Ur[i] = uR
-            uP = PID_controller.one_step(Bis, BIS_cible)
+            uP = PID_controller.one_step(Bis, BIS_target)
 
     elif style == 'maintenance':
         N_simu = 25 * 60  # 25 minutes
@@ -129,78 +136,34 @@ def simu(Patient_info: list, style: str, PID_param: list,
         Up = np.zeros(N_simu)
         Ur = np.zeros(N_simu)
 
-        w = []
-        w0 = []
-        lbw = []
-        ubw = []
-        J = 0
-        g = []
-        lbg = []
-        ubg = []
-
-        Ap = np.array(George.PropoPK.A)
-        Bp = np.array(George.PropoPK.B)
-        Ar = np.array(George.RemiPK.A)
-        Br = np.array(George.RemiPK.B)
-
-        x0p = np.linalg.solve(Ap, Bp * up_max / 20)
-        x0r = np.linalg.solve(Ar, Br * up_max / 10)
-        xp = cas.MX.sym('xp', 4)
-        w0 += x0p[:, 0].tolist()
-        xr = cas.MX.sym('xr', 4)
-        w0 += x0r[:, 0].tolist()
-        UP = cas.MX.sym('up', 1)
-        w = [xp, xr, UP]
-        w0 += [up_max / 2]
-        lbw = [1e-6] * 9
-        ubw = [1e4] * 9
-
-        up = xp[3] / Ce50p
-        ur = xr[3] / Ce50r
-        Phi = up / (up + ur + 1e-6)
-        U_50 = 1 - beta * (Phi - Phi**2)
-        i = (up + ur) / U_50
-        J = (50 - (E0 - Emax * i ** gamma / (1 + i ** gamma)))**2
-
-        g = [Ap @ xp + Bp * UP, Ar @ xr + Br * (ratio * UP)]
-        lbg = [-1e-8] * 8
-        ubg = [1e-8] * 8
-
-        prob = {'f': J, 'x': cas.vertcat(*w), 'g': cas.vertcat(*g)}
-        solver = cas.nlpsol('solver', 'ipopt', prob, {
-                            'ipopt.max_iter': 300, 'verbose': False},)
-        sol = solver(x0=w0, lbx=lbw, ubx=ubw, lbg=lbg, ubg=ubg)
-        w_opt = sol['x'].full().flatten()
-
-        # set the patien at the equilibrium point
-        George.PropoPK.x = np.expand_dims(np.array(w_opt[:4]), axis=1)
-        George.RemiPK.x = np.expand_dims(np.array(w_opt[4:8]), axis=1)
-        George.Hemo.CeP = w_opt[3]
-        George.Hemo.CeR = w_opt[7]
-        uP = w_opt[-1]
+        # find equilibrium input
+        uP, uR = George.find_bis_equilibrium_with_ratio(BIS_target, ratio)
+        #initialize the simulator with the equilibrium input
+        George.initialized_at_given_input(u_propo= uP, u_remi = uR)
+        Bis = George.bis
         # initialize the PID at the equilibriium point
         PID_controller.integral_part = uP / PID_controller.Kp
-        PID_controller.last_BIS = 50
+        PID_controller.last_BIS = BIS_target
         for i in range(N_simu):
             uR = min(ur_max, max(0, uP * ratio))
             uP = min(up_max, max(0, uP))
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, noise=False)
+            Bis, Co, Map, _ = George.one_step(uP, uR, noise=False)
             dist_bis, dist_map, dist_co = pas.disturbances.compute_disturbances(i, 'step')
             BIS[i] = min(100, Bis) + dist_bis
             MAP[i] = Map[0, 0] + dist_map
             CO[i] = Co[0, 0] + dist_co
             Up[i] = uP
             Ur[i] = uR
-            uP = PID_controller.one_step(BIS[i], BIS_cible)
+            uP = PID_controller.one_step(BIS[i], BIS_target)
 
-    IAE = np.sum(np.abs(BIS - BIS_cible))
+    IAE = np.sum(np.abs(BIS - BIS_target))
     return IAE, [BIS, MAP, CO, Up, Ur], George.hill_param
 
 
 # %% PSO
 # Patient table:
 # index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
-Patient_table = pd.read_csv('./scripts/Patient_table.csv')
+Patient_table = pd.read_csv('./Patient_table.csv')
 
 
 # phase = 'maintenance'
@@ -210,7 +173,7 @@ phase = 'induction'
 def one_simu(x, ratio, i):
     """Cost of one simulation, i is the patient index."""
     Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
-    iae, data, bis_param = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
+    iae, _, _ = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
     return iae
 
 
@@ -231,9 +194,9 @@ def cost(x, ratio):
 
 try:
     if phase == 'maintenance':
-        param_opti = pd.read_csv('./scripts/optimal_parameters_PID_reject.csv')
+        param_opti = pd.read_csv('./optimal_parameters_PID_reject.csv')
     else:
-        param_opti = pd.read_csv('./scripts/optimal_parameters_PID.csv')
+        param_opti = pd.read_csv('./optimal_parameters_PID.csv')
 except:
     param_opti = pd.DataFrame(columns=['ratio', 'Kp', 'Ti', 'Td'])
     for ratio in range(2, 3):
@@ -246,9 +209,9 @@ except:
             {'ratio': ratio, 'Kp': xopt[0], 'Ti': xopt[1], 'Td': xopt[2]}, index=[0])), ignore_index=True)
         print(ratio)
     if phase == 'maintenance':
-        param_opti.to_csv('./scripts/optimal_parameters_PID_reject.csv')
+        param_opti.to_csv('./optimal_parameters_PID_reject.csv')
     else:
-        param_opti.to_csv('./scripts/optimal_parameters_PID.csv')
+        param_opti.to_csv('./optimal_parameters_PID.csv')
 
 # %%test on patient table
 ts = 1
@@ -275,7 +238,7 @@ for ratio in range(2, 3):
         source.insert(len(source.columns), "E0", BIS_param[4])
         source.insert(len(source.columns), "Emax", BIS_param[5])
 
-        plot = p1.line(x='time', y='BIS', source=source)
+        plot = p1.line(x='time', y='BIS', source=source, width=2)
         tooltips = [('Ce50_P', "@Ce50_P"), ('Ce50_R', "@Ce50_R"),
                     ('gamma', "@gamma"), ('beta', "@beta"),
                     ('E0', "@E0"), ('Emax', "@Emax")]
@@ -285,14 +248,16 @@ for ratio in range(2, 3):
         p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
                 legend_label='CO (cL/min)', line_color="#f46d43")
         p3.line(np.arange(0, len(data[3]))*ts/60, data[3],
-                line_color="#006d43", legend_label='propofol (mg/min)')
+                line_color="#006d43", legend_label='propofol (mg/min)', width=2)
         p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
-                line_color="#f46d43", legend_label='remifentanil (ng/min)')
+                line_color="#f46d43", legend_label='remifentanil (ng/min)', width=2)
         if phase == 'induction':
-            TT, BIS_NADIR, ST10, ST20, US = pas.metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
+            TT, BIS_NADIR, ST10, ST20, US = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
+                                                                                data[0], phase=phase)
             TT_list.append(TT)
         else:
-            TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(data[0], Ts=1, phase=phase)
+            TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
+                                                                                   data[0], phase=phase)
             TT_list.append(TTp)
         IAE_list.append(IAE)
 p1.title.text = 'BIS'
@@ -337,6 +302,7 @@ for i in range(Number_of_patient):
     IAE, data, bis_param = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
+    
     dico = {'age': [age],
             'height': [height],
             'weight': [weight],
@@ -350,8 +316,8 @@ for i in range(Number_of_patient):
     pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
 
 if phase == 'maintenance':
-    df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+    df.to_csv("../Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
 else:
-    df.to_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
+    df.to_csv("../Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
 
 pd_param.hist(density=True)

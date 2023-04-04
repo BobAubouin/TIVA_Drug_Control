@@ -14,8 +14,8 @@ from scipy.linalg import block_diag
 from filterpy.common import Q_continuous_white_noise
 
 # Local imports
-from src.estimators import EKF
-from src.controller import NMPC
+from estimators import EKF
+from controller import NMPC
 import python_anesthesia_simulator as pas
 
 
@@ -63,17 +63,17 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         BIS_param = None
     else:
         BIS_param = [Ce50p, Ce50r, gamma, beta, E0, Emax]
-    George = pas.Patient(Patient_info[:4], hill_param=BIS_param,
-                         random_PK=random_PK, random_PD=random_PD, ts=ts, save_data=False)
+    George = pas.Patient(Patient_info[:4], hill_param=BIS_param, random_PK=random_PK,
+                         random_PD=random_PD, ts=ts, save_data_bool=False)
     # Nominal parameters
     George_nominal = pas.Patient(Patient_info[:4], hill_param=None, ts=ts)
     BIS_param_nominal = George_nominal.hill_param
     BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A
-    Ar = George_nominal.remi_pk.continuous_sys.A
-    Bp = George_nominal.propo_pk.continuous_sys.B
-    Br = George_nominal.remi_pk.continuous_sys.B
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Bp = George_nominal.propo_pk.continuous_sys.B[:4]
+    Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
     B_nom = block_diag(Bp, Br)
 
@@ -116,9 +116,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'null')
-            Bis, Co, Map, _ = George.one_step(uP, uR, Dist=Dist, noise=False)
-            Xp[:, i] = George.propo_pk.x
-            Xr[:, i] = George.remi_pk.x
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
 
             BIS[i] = Bis
             MAP[i] = Map
@@ -154,9 +154,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         for i in range(N_simu):
 
             Dist = pas.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, Dist=Dist, noise=True)
-            Xp[:, i] = George.PropoPK.x.T[0]
-            Xr[:, i] = George.RemiPK.x.T[0]
+            Bis, Co, Map, _, _ = George.one_step(uP, uR, dist=Dist, noise=True)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
 
             BIS[i] = Bis
             MAP[i] = Map
@@ -216,7 +216,7 @@ for i in range(Number_of_patient):
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-df.to_csv("./Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
+df.to_csv("../Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
 t1 = time.time()
 
 print(t1 - t0)

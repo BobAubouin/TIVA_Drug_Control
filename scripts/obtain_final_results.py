@@ -25,7 +25,7 @@ Created on Tue Jan 24 10:54:59 2023
 """
 
 
-folder_path = './Results_data/'
+folder_path = '../Results_data/'
 
 Table_PID = pd.read_csv(folder_path + 'result_table_PID_n=500')
 Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_n=500')
@@ -65,9 +65,9 @@ Number_of_patient = 500
 phase = 'induction'
 
 
-Data_PID = pd.read_csv("./Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
-Data_MMPC = pd.read_csv("./Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
-Data_NMPC = pd.read_csv("./Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
+Data_PID = pd.read_csv("../Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
+Data_MMPC = pd.read_csv("../Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
+Data_NMPC = pd.read_csv("../Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
 
 # find Patient with minimum BIS for MMPC controller
 Patient_id_min_PID = 0
@@ -120,7 +120,7 @@ ax.set_ylabel('BIS', fontsize=13)
 plt.draw()
 
 # save it
-savepath = "./Results_Images/worst_bis.pdf"
+savepath = "../Results_Images/worst_bis.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -174,7 +174,7 @@ plt.draw()
 # plt.draw()
 
 # save it
-savepath = "./Results_Images/worst_bis_inputs.pdf"
+savepath = "../Results_Images/worst_bis_inputs.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -229,7 +229,7 @@ plt.xlim([-0.2, 10.2])
 plt.draw()
 
 # save it
-savepath = "./Results_Images/BIS_mean_case.pdf"
+savepath = "../Results_Images/BIS_mean_case.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -262,6 +262,6 @@ ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
 plt.draw()
 
 # save it
-savepath = "./Results_Images/cost.pdf"
+savepath = "../Results_Images/cost.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()

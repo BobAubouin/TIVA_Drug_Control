@@ -29,7 +29,7 @@ if title == '_PID':
     ts = 1
 else:
     ts = 2
-Data = pd.read_csv("./Results_data/result" + title + "_n=" + str(Number_of_patient) + '.csv')
+Data = pd.read_csv("../Results_data/result" + title + "_n=" + str(Number_of_patient) + '.csv')
 
 
 if phase == 'induction':
@@ -67,7 +67,7 @@ for i in range(Number_of_patient):  # Number_of_patient
 
     if phase == 'induction':
         TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
-            Data[str(i) + '_BIS'], Ts=ts, phase=phase)
+            np.arange(0, len(BIS)) * ts, BIS, phase=phase)
         TT_list.append(TT)
         BIS_NADIR_list.append(BIS_NADIR)
         ST10_list.append(ST10)
@@ -75,7 +75,7 @@ for i in range(Number_of_patient):  # Number_of_patient
         US_list.append(US)
     elif phase == 'maintenance':
         TTp, BIS_NADIRp, TTn, BIS_NADIRn = metrics.compute_control_metrics(
-            Data[str(i) + '_BIS'], Ts=ts, phase=phase)
+            np.arange(0, len(BIS)) * ts, BIS, phase=phase)
         TTp_list.append(TTp)
         TTn_list.append(TTn)
         BIS_NADIRp_list.append(BIS_NADIRp)
@@ -152,8 +152,8 @@ styler.hide(axis='index')
 styler.format(precision=2)
 print(styler.to_latex())
 
-result_table.to_csv("./Results_data/result_table" + title + "_n=" + str(Number_of_patient))
+result_table.to_csv("../Results_data/result_table" + title + "_n=" + str(Number_of_patient))
 p1.output_backend = "svg"
-export_svg(p1, filename="./Results_Images/BIS" + title + "_n=" + str(Number_of_patient) + ".svg")
+export_svg(p1, filename="../Results_Images/BIS" + title + "_n=" + str(Number_of_patient) + ".svg")
 p3.output_backend = "svg"
-export_svg(p3, filename="./Results_Images/input" + title + "_n=" + str(Number_of_patient) + ".svg")
+export_svg(p3, filename="../Results_Images/input" + title + "_n=" + str(Number_of_patient) + ".svg")
