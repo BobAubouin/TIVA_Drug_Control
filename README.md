@@ -12,8 +12,8 @@ In this paper, a multi-model predictive control approach is used to automate the
 
 Install all the required packages with the command:
 
-```python
-pip install - r requirement.txt
+```
+pip install -r requirement.txt
 ```
 
 ## Usage
