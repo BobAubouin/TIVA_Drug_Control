@@ -4,7 +4,7 @@ Created on Wed Dec  7 09:51:25 2022
 @author: aubouinb
 """
 
-
+# %% Import
 # Standard import
 import time
 import multiprocessing
@@ -80,8 +80,8 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     BIS_param_nominal = George_nominal.hill_param
     # BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
-    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4, :4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4, :4]
     Bp = George_nominal.propo_pk.continuous_sys.B[:4]
     Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
@@ -209,7 +209,7 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
     print(np.array(BIS_parameters[best_model]).round(3))
     print("Real paramaters:")
     print(np.array(George.hill_param).round(3))
-    return(IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
+    return (IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
 
 
 # %% Table simultation
@@ -316,3 +316,8 @@ p3.xaxis.axis_label = 'Time (min)'
 grid = row(column(p3, p1, p2), p4)
 
 show(grid)
+
+# %%
+
+
+# plot bis

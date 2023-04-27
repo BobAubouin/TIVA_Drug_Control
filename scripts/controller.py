@@ -6,7 +6,7 @@ from scipy.linalg import expm
 import matplotlib.pyplot as plt
 
 
-def discretize(A: list, B: list, ts: float) -> (list, list):
+def discretize(A: list, B: list, ts: float) -> tuple[list, list]:
     """Discretize LTI systems.
 
     Parameters
@@ -260,7 +260,7 @@ class NMPC:
                 'x': cas.vertcat(*w), 'g': cas.vertcat(*(gu))}  # +gbis
         self.solver = cas.nlpsol('solver', 'ipopt', prob, opts)
 
-    def one_step(self, x: list, Bis_target: float, Bis_measure: float) -> (float, float):
+    def one_step(self, x: list, Bis_target: float, Bis_measure: float) -> tuple[float, float]:
         """
         Compute the next optimal control input given the current state of the system and the BIS target.
 
@@ -395,7 +395,7 @@ class MMPC():
         self.Ur = np.zeros(self.window_length-1)
         self.BIS = np.zeros(self.window_length)
 
-    def one_step(self, U_prec: list, BIS: float) -> (list, int):
+    def one_step(self, U_prec: list, BIS: float) -> tuple[list, int]:
         """
         Compute the optimal control input using past control input value and current BIS measurement.
 
