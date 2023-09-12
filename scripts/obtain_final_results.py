@@ -9,6 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.colors as mcolors
+import tikzplotlib
 
 # plot config
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -24,94 +25,147 @@ Created on Tue Jan 24 10:54:59 2023
 @author: aubouinb
 """
 
+phase = 'total'
 
-folder_path = '../Results_data/'
+folder_path = './Results_data/'
+image_folder_path = './Results_Images/'
 
-Table_PID = pd.read_csv(folder_path + 'result_table_PID_n=500')
-Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_n=500')
-Table_MMPC = pd.read_csv(folder_path + 'result_table_multi_NMPC_n=500')
+try:
+    Table_PID = pd.read_csv(folder_path + 'result_table_PID_' + phase + '_n=500')
+    Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_' + phase + '_n=500')
+    Table_MMPC = pd.read_csv(folder_path + 'result_table_multi_' + phase + '_NMPC_n=500')
+    Table_MHEMPC = pd.read_csv(folder_path + 'result_table_MHE_' + phase + '_NMPC_n=500')
 
+    final_table = pd.DataFrame(columns=['Controller', 'TT_mean', 'TT_max', 'BIS_NADIR_mean', 'BIS_NADIR_min',
+                                        'ST10_mean', 'ST10_max', 'ST20_mean', 'ST20_max', 'US_mean', 'US_max'])
 
-final_table = pd.DataFrame(columns=['Controller', 'TT_mean', 'TT_max', 'BIS_NADIR_mean', 'BIS_NADIR_min',
-                                    'ST10_mean', 'ST10_max', 'ST20_mean', 'ST20_max', 'US_mean', 'US_max'])
+    final_table['Controller'] = ['PID', 'NMPC', 'MMPC', 'MHE_NMPC']
 
-final_table['Controller'] = ['PID', 'NMPC', 'MMPC']
+    list_data = [Table_PID, Table_NMPC, Table_MMPC, Table_MHEMPC]
 
-list_data = [Table_PID, Table_NMPC, Table_MMPC]
+    final_table['TT_mean'] = [str(df['TT (min)'][0]) + "$\pm$" + str(df['TT (min)'][1]) for df in list_data]
+    final_table['TT_max'] = [str(df['TT (min)'][3]) for df in list_data]
 
-final_table['TT_mean'] = [str(df['TT (min)'][0]) + "$\pm$" + str(df['TT (min)'][1]) for df in list_data]
-final_table['TT_max'] = [str(df['TT (min)'][3]) for df in list_data]
+    final_table['BIS_NADIR_mean'] = [str(df['BIS_NADIR'][0]) + "$\pm$" + str(df['BIS_NADIR'][1]) for df in list_data]
+    final_table['BIS_NADIR_min'] = [str(df['BIS_NADIR'][2]) for df in list_data]
 
-final_table['BIS_NADIR_mean'] = [str(df['BIS_NADIR'][0]) + "$\pm$" + str(df['BIS_NADIR'][1]) for df in list_data]
-final_table['BIS_NADIR_min'] = [str(df['BIS_NADIR'][2]) for df in list_data]
+    final_table['ST10_mean'] = [str(df['ST10 (min)'][0]) + "$\pm$" + str(df['ST10 (min)'][1]) for df in list_data]
+    final_table['ST10_max'] = [str(df['ST10 (min)'][3]) for df in list_data]
 
-final_table['ST10_mean'] = [str(df['ST10 (min)'][0]) + "$\pm$" + str(df['ST10 (min)'][1]) for df in list_data]
-final_table['ST10_max'] = [str(df['ST10 (min)'][3]) for df in list_data]
+    final_table['ST20_mean'] = [str(df['ST20 (min)'][0]) + "$\pm$" + str(df['ST20 (min)'][1]) for df in list_data]
+    final_table['ST20_max'] = [str(df['ST20 (min)'][3]) for df in list_data]
 
-final_table['ST20_mean'] = [str(df['ST20 (min)'][0]) + "$\pm$" + str(df['ST20 (min)'][1]) for df in list_data]
-final_table['ST20_max'] = [str(df['ST20 (min)'][3]) for df in list_data]
+    final_table['US_mean'] = [str(df['US'][0]) + "$\pm$" + str(df['US'][1]) for df in list_data]
+    final_table['US_max'] = [str(df['US'][3]) for df in list_data]
 
-final_table['US_mean'] = [str(df['US'][0]) + "$\pm$" + str(df['US'][1]) for df in list_data]
-final_table['US_max'] = [str(df['US'][3]) for df in list_data]
+    styler = final_table.style
+    styler.hide(axis='index')
+    styler.format(precision=2)
+    print(styler.to_latex())
+except FileNotFoundError:
+    print("No data available to construct table")
 
-
-styler = final_table.style
-styler.hide(axis='index')
-styler.format(precision=2)
-print(styler.to_latex())
 
 # get data
-Number_of_patient = 500
-phase = 'induction'
+Number_of_patient = 8
+phase = 'total'
+
+bool_PID = False
+bool_NMPC = False
+bool_MMPC = False
+bool_MHEMPC = False
+try:
+    Data_PID = pd.read_csv(folder_path + "result_PID_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    bool_PID = True
+except FileNotFoundError:
+    print("No data available for PID")
+
+try:
+    Data_NMPC = pd.read_csv(folder_path + "result_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    bool_NMPC = True
+except FileNotFoundError:
+    print("No data available for NMPC")
+
+try:
+    Data_MMPC = pd.read_csv(folder_path + "result_multi_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    bool_MMPC = True
+except FileNotFoundError:
+    print("No data available for MMPC")
+
+try:
+    Data_MHEMPC = pd.read_csv(folder_path + "result_MHE_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    bool_MHEMPC = True
+except FileNotFoundError:
+    print("No data available for MHEMPC")
 
 
-Data_PID = pd.read_csv("../Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
-Data_MMPC = pd.read_csv("../Results_data/result_multi_NMPC_n=" + str(Number_of_patient) + '.csv')
-Data_NMPC = pd.read_csv("../Results_data/result_NMPC_n=" + str(Number_of_patient) + '.csv')
-
-# find Patient with minimum BIS for MMPC controller
+# find Patient with minimum BIS for each controller
 Patient_id_min_PID = 0
 Patient_id_min_NMPC = 0
 Patient_id_min_MMPC = 0
+Patient_id_min_MHEMPC = 0
 for patient_id in range(1, Number_of_patient):
-    if np.min(Data_PID[str(patient_id)+'_BIS']) < np.min(Data_PID[str(Patient_id_min_PID)+'_BIS']):
-        Patient_id_min_PID = patient_id
+    if bool_PID:
+        if np.min(Data_PID[str(patient_id)+'_BIS']) < np.min(Data_PID[str(Patient_id_min_PID)+'_BIS']):
+            Patient_id_min_PID = patient_id
+    if bool_NMPC:
+        if np.min(Data_NMPC[str(patient_id)+'_BIS']) < np.min(Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']):
+            Patient_id_min_NMPC = patient_id
+    if bool_MMPC:
+        if np.min(Data_MMPC[str(patient_id)+'_BIS']) < np.min(Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']):
+            Patient_id_min_MMPC = patient_id
+    if bool_MHEMPC:
+        if np.min(Data_MHEMPC[str(patient_id)+'_BIS']) < np.min(Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_BIS']):
+            Patient_id_min_MHEMPC = patient_id
 
-    if np.min(Data_NMPC[str(patient_id)+'_BIS']) < np.min(Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']):
-        Patient_id_min_NMPC = patient_id
-
-    if np.min(Data_MMPC[str(patient_id)+'_BIS']) < np.min(Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']):
-        Patient_id_min_MMPC = patient_id
-
-BIS_PID = Data_PID[str(Patient_id_min_PID)+'_BIS']
-BIS_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']
-BIS_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']
+print(f"worst patient for MHE-MPC: {Patient_id_min_MHEMPC}")
+if bool_PID:
+    BIS_PID = Data_PID[str(Patient_id_min_PID)+'_BIS']
+if bool_NMPC:
+    BIS_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_BIS']
+if bool_MMPC:
+    BIS_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_BIS']
+if bool_MHEMPC:
+    BIS_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_BIS']
 
 ts_PID = 1
 ts_MPC = 2
-Time_PID = np.arange(0, len(BIS_PID)) * ts_PID / 60
-Time_MPC = np.arange(0, len(BIS_NMPC)) * ts_MPC / 60
+if bool_PID:
+    Time_PID = np.arange(0, len(BIS_PID)) * ts_PID / 60
+if bool_NMPC:
+    Time_MPC = np.arange(0, len(BIS_NMPC)) * ts_MPC / 60
 
-Up_PID = Data_PID[str(Patient_id_min_PID)+'_Up']
-Ur_PID = Data_PID[str(Patient_id_min_PID)+'_Ur']
-Up_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Up']
-Ur_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Ur']
-Up_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Up']
-Ur_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Ur']
+if bool_PID:
+    Up_PID = Data_PID[str(Patient_id_min_PID)+'_Up']
+    Ur_PID = Data_PID[str(Patient_id_min_PID)+'_Ur']
+if bool_NMPC:
+    Up_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Up']
+    Ur_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Ur']
+if bool_MMPC:
+    Up_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Up']
+    Ur_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Ur']
+if bool_MHEMPC:
+    Up_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_Up']
+    Ur_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_Ur']
 
 
 # %% Create BIS figure
 ax: matplotlib.pyplot.Axes
 fig, ax = plt.subplots()
-ax.plot(Time_PID, BIS_PID, label='PID')
-ax.plot(Time_MPC, BIS_NMPC, label='NMPC')
-ax.plot(Time_MPC, BIS_MMPC, label='MMPC')
+if bool_PID:
+    ax.plot(Time_PID, BIS_PID, label='PID')
+if bool_NMPC:
+    ax.plot(Time_MPC, BIS_NMPC, label='NMPC')
+if bool_MMPC:
+    ax.plot(Time_MPC, BIS_MMPC, label='MMPC')
+if bool_MHEMPC:
+    ax.plot(Time_MPC, BIS_MHEMPC, label='MHE_NMPC')
 ax.grid(linewidth=0.4)
 ax.legend(fontsize=13)
 
 # ax.set_yticks(list(ax.get_yticks()) + [int(BIS_PID[0])])
 ax.set_ylim([16, 102])
-ax.set_xlim([-0.2, 10.2])
+# ax.set_xlim([-0.2, 10.2])
 ax.set_xlabel('Time (min)', fontsize=13)
 ax.set_ylabel('BIS', fontsize=13)
 # ygridlines = ax.get_ygridlines()
@@ -120,26 +174,36 @@ ax.set_ylabel('BIS', fontsize=13)
 plt.draw()
 
 # save it
-savepath = "../Results_Images/worst_bis.pdf"
+savepath = image_folder_path + "worst_bis.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
 # Create drug rates figures
 linewidth = 1.3
-plt.plot(Time_PID, Up_PID, label='Propofol PID (mg/s)', linewidth=linewidth)
-plt.plot(Time_MPC, Up_NMPC, label='Propofol NMPC (mg/s)', linewidth=linewidth)
-plt.plot(Time_MPC, Up_MMPC, label='Propofol MMPC (mg/s)', linewidth=linewidth)
-
-plt.plot(Time_PID, Ur_PID, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'],
-         label='Remifentanil PID (µg/s)')
-plt.plot(Time_MPC, Ur_NMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'],
-         label='Remifentanil NMPC (µg/s)')
-plt.plot(Time_MPC, Ur_MMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'],
-         label='Remifentanil MMPC (µg/s)')
+if bool_PID:
+    plt.plot(Time_PID, Up_PID, label='Propofol PID (mg/s)',
+             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'])
+    plt.plot(Time_PID, Ur_PID, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'],
+             label='Remifentanil PID (µg/s)')
+if bool_NMPC:
+    plt.plot(Time_MPC, Up_NMPC, label='Propofol NMPC (mg/s)',
+             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'])
+    plt.plot(Time_MPC, Ur_NMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'],
+             label='Remifentanil NMPC (µg/s)')
+if bool_MMPC:
+    plt.plot(Time_MPC, Up_MMPC, label='Propofol MMPC (mg/s)',
+             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'])
+    plt.plot(Time_MPC, Ur_MMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'],
+             label='Remifentanil MMPC (µg/s)')
+if bool_MHEMPC:
+    plt.plot(Time_MPC, Up_MHEMPC, label='Propofol MHE_NMPC (mg/s)',
+             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'])
+    plt.plot(Time_MPC, Ur_MHEMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'],
+             label='Remifentanil MHE_NMPC (µg/s)')
 
 plt.grid(linewidth=0.4)
 plt.legend(fontsize=13)
-plt.xlim([-0.2, 10.2])
+# plt.xlim([-0.2, 10.2])
 plt.xlabel('Time (min)', fontsize=13)
 plt.draw()
 
@@ -174,62 +238,87 @@ plt.draw()
 # plt.draw()
 
 # save it
-savepath = "../Results_Images/worst_bis_inputs.pdf"
+savepath = image_folder_path + "worst_bis_inputs" + phase + ".pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
 # %% Second figure: mean values
-
-BIS_PID = Data_PID.loc[:, Data_PID.columns.str.contains('BIS')]
-mean_BIS_PID = BIS_PID.mean(axis=1)
-std_BIS_PID = BIS_PID.std(axis=1)
-
-BIS_NMPC = Data_NMPC.loc[:, Data_NMPC.columns.str.contains('BIS')]
-mean_BIS_NMPC = BIS_NMPC.mean(axis=1)
-std_BIS_NMPC = BIS_NMPC.std(axis=1)
-
-BIS_MMPC = Data_MMPC.loc[:, Data_MMPC.columns.str.contains('BIS')]
-mean_BIS_MMPC = BIS_MMPC.mean(axis=1)
-std_BIS_MMPC = BIS_MMPC.std(axis=1)
-
 transparency = 0.3
-plt.fill_between(Time_MPC, mean_BIS_MMPC-std_BIS_MMPC, mean_BIS_MMPC+std_BIS_MMPC,
-                 alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:green'])  # , hatch="\\\\")
 
-plt.fill_between(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, mean_BIS_NMPC+std_BIS_NMPC,
-                 alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:orange'])
+if bool_PID:
+    BIS_PID = Data_PID.loc[:, Data_PID.columns.str.contains('BIS')]
+    mean_BIS_PID = BIS_PID.mean(axis=1)
+    std_BIS_PID = BIS_PID.std(axis=1)
+    plt.fill_between(Time_PID, mean_BIS_PID-std_BIS_PID, mean_BIS_PID+std_BIS_PID,
+                     alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:blue'])
 
-plt.fill_between(Time_PID, mean_BIS_PID-std_BIS_PID, mean_BIS_PID+std_BIS_PID,
-                 alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:blue'])  # , hatch="////")
+if bool_NMPC:
+    BIS_NMPC = Data_NMPC.loc[:, Data_NMPC.columns.str.contains('BIS')]
+    mean_BIS_NMPC = BIS_NMPC.mean(axis=1)
+    std_BIS_NMPC = BIS_NMPC.std(axis=1)
+    plt.fill_between(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, mean_BIS_NMPC+std_BIS_NMPC,
+                     alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:orange'])
 
-plt.plot(Time_PID, mean_BIS_PID-std_BIS_PID, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
-plt.plot(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
-plt.plot(Time_MPC, mean_BIS_MMPC-std_BIS_MMPC, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
+if bool_MMPC:
+    BIS_MMPC = Data_MMPC.loc[:, Data_MMPC.columns.str.contains('BIS')]
+    mean_BIS_MMPC = BIS_MMPC.mean(axis=1)
+    std_BIS_MMPC = BIS_MMPC.std(axis=1)
+    plt.fill_between(Time_PID, mean_BIS_PID-std_BIS_PID, mean_BIS_PID+std_BIS_PID,
+                     alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:blue'])
 
-plt.plot(Time_PID, mean_BIS_PID+std_BIS_PID, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
-plt.plot(Time_MPC, mean_BIS_NMPC+std_BIS_NMPC, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
-plt.plot(Time_MPC, mean_BIS_MMPC+std_BIS_MMPC, linestyle='--',
-         color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
+if bool_MHEMPC:
+    BIS_MHEMPC = Data_MHEMPC.loc[:, Data_MHEMPC.columns.str.contains('BIS')]
+    mean_BIS_MHEMPC = BIS_MHEMPC.mean(axis=1)
+    std_BIS_MHEMPC = BIS_MHEMPC.std(axis=1)
+    plt.fill_between(Time_MPC, mean_BIS_MHEMPC-std_BIS_MHEMPC, mean_BIS_MHEMPC+std_BIS_MHEMPC,
+                     alpha=transparency, facecolor=mcolors.TABLEAU_COLORS['tab:red'])
 
-plt.plot(Time_PID, mean_BIS_PID, label='PID', color=mcolors.TABLEAU_COLORS['tab:blue'])
-plt.plot(Time_MPC, mean_BIS_NMPC, label='NMPC', color=mcolors.TABLEAU_COLORS['tab:orange'])
-plt.plot(Time_MPC, mean_BIS_MMPC, label='MMPC', color=mcolors.TABLEAU_COLORS['tab:green'])
+
+if bool_PID:
+    plt.plot(Time_PID, mean_BIS_PID-std_BIS_PID, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
+if bool_NMPC:
+    plt.plot(Time_MPC, mean_BIS_NMPC-std_BIS_NMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
+if bool_MMPC:
+    plt.plot(Time_MPC, mean_BIS_MMPC-std_BIS_MMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
+if bool_MHEMPC:
+    plt.plot(Time_MPC, mean_BIS_MHEMPC-std_BIS_MHEMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:red'], linewidth=1)
+
+if bool_PID:
+    plt.plot(Time_PID, mean_BIS_PID+std_BIS_PID, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:blue'], linewidth=1)
+if bool_NMPC:
+    plt.plot(Time_MPC, mean_BIS_NMPC+std_BIS_NMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:orange'], linewidth=1)
+if bool_MMPC:
+    plt.plot(Time_MPC, mean_BIS_MMPC+std_BIS_MMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:green'], linewidth=1)
+if bool_MHEMPC:
+    plt.plot(Time_MPC, mean_BIS_MHEMPC+std_BIS_MHEMPC, linestyle='--',
+             color=mcolors.TABLEAU_COLORS['tab:red'], linewidth=1)
+
+if bool_PID:
+    plt.plot(Time_PID, mean_BIS_PID, label='PID', color=mcolors.TABLEAU_COLORS['tab:blue'])
+if bool_NMPC:
+    plt.plot(Time_MPC, mean_BIS_NMPC, label='NMPC', color=mcolors.TABLEAU_COLORS['tab:orange'])
+if bool_MMPC:
+    plt.plot(Time_MPC, mean_BIS_MMPC, label='MMPC', color=mcolors.TABLEAU_COLORS['tab:green'])
+if bool_MHEMPC:
+    plt.plot(Time_MPC, mean_BIS_MHEMPC, label='MHE_NMPC', color=mcolors.TABLEAU_COLORS['tab:red'])
 
 plt.grid(linewidth=0.4)
 plt.legend(fontsize=13)
 plt.xlabel('Time (min)', fontsize=13)
 plt.ylabel('BIS', fontsize=13)
 plt.ylim([40, 100])
-plt.xlim([-0.2, 10.2])
+# plt.xlim([-0.2, 10.2])
 plt.draw()
 
 # save it
-savepath = "../Results_Images/BIS_mean_case.pdf"
+savepath = image_folder_path + "BIS_mean_case_" + phase + ".pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()
 
@@ -259,9 +348,10 @@ x_left, x_right = ax.get_xlim()
 y_low, y_high = ax.get_ylim()
 ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
 
+
 plt.draw()
 
 # save it
-savepath = "../Results_Images/cost.pdf"
+savepath = image_folder_path + "cost.pdf"
 plt.savefig(savepath, bbox_inches='tight', format='pdf')
 plt.show()

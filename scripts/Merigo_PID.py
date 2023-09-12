@@ -9,7 +9,7 @@ Communications in Nonlinear Science and Numerical Simulation
 # %% import packages
 
 # Standard import
-import multiprocessing
+import multiprocessing as mp
 from functools import partial
 
 # Third party imports
@@ -19,13 +19,14 @@ from bokeh.models import HoverTool
 from bokeh.layouts import row, column
 from bokeh.plotting import figure, show
 from pyswarm import pso
-import casadi as cas
+from tqdm import tqdm
 
 # Local imports
 from controller import PID
 import python_anesthesia_simulator as pas
 
-#%% Define the simulation function
+# %% Define the simulation function
+
 
 def simu(Patient_info: list, style: str, PID_param: list,
          random_PK: bool = False, random_PD: bool = False) -> tuple[float, list, list]:
@@ -96,9 +97,34 @@ def simu(Patient_info: list, style: str, PID_param: list,
         uR = min(ur_max, max(0, uP * ratio))
         for i in range(N_simu):
             Bis, Co, Map, _ = George.one_step(uP, uR, noise=False)
+            BIS[i] = Bis[0]
+            MAP[i] = Map[0]
+            CO[i] = Co[0]
+            if i == N_simu - 1:
+                break
+            uP = PID_controller.one_step(Bis[0], BIS_target)
+            uR = min(ur_max, max(0, uP * ratio))
+            uP = min(up_max, max(0, uP))
+            Up[i] = uP
+            Ur[i] = uR
+
+    elif style == 'total':
+        N_simu = int(25 / ts) * 60
+        BIS = np.zeros(N_simu)
+        MAP = np.zeros(N_simu)
+        CO = np.zeros(N_simu)
+        Up = np.zeros(N_simu)
+        Ur = np.zeros(N_simu)
+        uP = 0
+        uR = min(ur_max, max(0, uP * ratio))
+        for i in range(N_simu):
+            Dist = pas.disturbances.compute_disturbances(i * ts, 'step', end_step=15*60)
+            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=True)
+            if type(Bis) == np.ndarray:
+                Bis = Bis[0]
             BIS[i] = Bis
-            MAP[i] = Map
-            CO[i] = Co
+            MAP[i] = Map[0]
+            CO[i] = Co[0]
             if i == N_simu - 1:
                 break
             uP = PID_controller.one_step(Bis, BIS_target)
@@ -106,27 +132,6 @@ def simu(Patient_info: list, style: str, PID_param: list,
             uP = min(up_max, max(0, uP))
             Up[i] = uP
             Ur[i] = uR
-
-    elif style == 'total':
-        N_simu = int(60 / ts) * 60
-        BIS = np.zeros(N_simu)
-        MAP = np.zeros(N_simu)
-        CO = np.zeros(N_simu)
-        Up = np.zeros(N_simu)
-        Ur = np.zeros(N_simu)
-        uP = 0
-        for i in range(N_simu):
-            uR = min(ur_max, max(0, uP * ratio))
-            uP = min(up_max, max(0, uP))
-            Dist = pas.disturbances.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
-
-            BIS[i] = min(100, Bis)
-            MAP[i] = Map[0, 0]
-            CO[i] = Co[0, 0]
-            Up[i] = uP
-            Ur[i] = uR
-            uP = PID_controller.one_step(Bis, BIS_target)
 
     elif style == 'maintenance':
         N_simu = 25 * 60  # 25 minutes
@@ -138,8 +143,8 @@ def simu(Patient_info: list, style: str, PID_param: list,
 
         # find equilibrium input
         uP, uR = George.find_bis_equilibrium_with_ratio(BIS_target, ratio)
-        #initialize the simulator with the equilibrium input
-        George.initialized_at_given_input(u_propo= uP, u_remi = uR)
+        # initialize the simulator with the equilibrium input
+        George.initialized_at_given_input(u_propo=uP, u_remi=uR)
         Bis = George.bis
         # initialize the PID at the equilibriium point
         PID_controller.integral_part = uP / PID_controller.Kp
@@ -163,7 +168,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
 # %% PSO
 # Patient table:
 # index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
-Patient_table = pd.read_csv('./Patient_table.csv')
+Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 
 
 # phase = 'maintenance'
@@ -183,7 +188,7 @@ def cost(x, ratio):
     x = [Kp, Ti, Td]
     IAE is the maximum integrated absolut error over the patient population.
     """
-    pool_obj = multiprocessing.Pool()
+    pool_obj = mp.Pool()
     func = partial(one_simu, x, ratio)
     IAE = pool_obj.map(func, range(1, 17))
     pool_obj.close()
@@ -194,9 +199,9 @@ def cost(x, ratio):
 
 try:
     if phase == 'maintenance':
-        param_opti = pd.read_csv('./optimal_parameters_PID_reject.csv')
+        param_opti = pd.read_csv('./scripts/optimal_parameters_PID_reject.csv')
     else:
-        param_opti = pd.read_csv('./optimal_parameters_PID.csv')
+        param_opti = pd.read_csv('./scripts/optimal_parameters_PID.csv')
 except:
     param_opti = pd.DataFrame(columns=['ratio', 'Kp', 'Ti', 'Td'])
     for ratio in range(2, 3):
@@ -209,24 +214,26 @@ except:
             {'ratio': ratio, 'Kp': xopt[0], 'Ti': xopt[1], 'Td': xopt[2]}, index=[0])), ignore_index=True)
         print(ratio)
     if phase == 'maintenance':
-        param_opti.to_csv('./optimal_parameters_PID_reject.csv')
+        param_opti.to_csv('./scripts/optimal_parameters_PID_reject.csv')
     else:
-        param_opti.to_csv('./optimal_parameters_PID.csv')
+        param_opti.to_csv('./scripts/optimal_parameters_PID.csv')
 
 # %%test on patient table
+phase = 'total'
 ts = 1
 IAE_list = []
 TT_list = []
 p1 = figure(width=900, height=300)
 p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
+
 for ratio in range(2, 3):
     print('ratio = ' + str(ratio))
     Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
     Ti = float(param_opti.loc[param_opti['ratio'] == ratio, 'Ti'])
     Td = float(param_opti.loc[param_opti['ratio'] == ratio, 'Td'])
     PID_param = [Kp, Ti, Td, ratio]
-    for i in range(1, 14):
+    for i in tqdm(range(1, 14)):
         Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
         IAE, data, BIS_param = simu(Patient_info, phase, PID_param)
         source = pd.DataFrame(data=data[0], columns=['BIS'])
@@ -255,9 +262,12 @@ for ratio in range(2, 3):
             TT, BIS_NADIR, ST10, ST20, US = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
                                                                                 data[0], phase=phase)
             TT_list.append(TT)
-        else:
+        elif phase == 'maintenance':
             TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
                                                                                    data[0], phase=phase)
+        else:  # total
+            TT, BIS_NADIR, ST10, ST20, US, TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(
+                np.arange(0, len(data[0]))*ts, data[0], phase=phase)
             TT_list.append(TTp)
         IAE_list.append(IAE)
 p1.title.text = 'BIS'
@@ -274,9 +284,8 @@ print("Max TT : " + str(np.max(TT_list)))
 
 # %% Intra patient variability
 
-
 # Simulation parameter
-phase = 'induction'
+phase = 'total'
 ratio = 2
 Number_of_patient = 500
 # Controller parameters
@@ -289,8 +298,9 @@ PID_param = [Kp, Ti, Td, ratio]
 df = pd.DataFrame()
 pd_param = pd.DataFrame()
 name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
-for i in range(Number_of_patient):
-    print(i)
+
+
+def one_simu(i):
     np.random.seed(i)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
@@ -299,10 +309,24 @@ for i in range(Number_of_patient):
     gender = np.random.randint(low=0, high=2)
 
     Patient_info = [age, height, weight, gender] + [None] * 6
-    IAE, data, bis_param = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
+    _, data, bis_param = simu(Patient_info, phase, PID_param, random_PD=True, random_PK=True)
+    return Patient_info, data, bis_param
+
+
+with mp.Pool(mp.cpu_count()-2) as p:
+    r = list(tqdm(p.imap(one_simu, range(Number_of_patient)), total=Number_of_patient))
+
+
+for i in tqdm(range(Number_of_patient)):
+    Patient_info, data, bis_param = r[i]
+    age = Patient_info[0]
+    height = Patient_info[1]
+    weight = Patient_info[2]
+    gender = Patient_info[3]
+
     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
-    
+
     dico = {'age': [age],
             'height': [height],
             'weight': [weight],
@@ -316,8 +340,10 @@ for i in range(Number_of_patient):
     pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
 
 if phase == 'maintenance':
-    df.to_csv("../Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+    df.to_csv("./Results_data/result_PID_maintenance_n=" + str(Number_of_patient) + '.csv')
+elif phase == 'induction':
+    df.to_csv("./Results_data/result_PID_induction_n=" + str(Number_of_patient) + '.csv')
 else:
-    df.to_csv("../Results_data/result_PID_n=" + str(Number_of_patient) + '.csv')
+    df.to_csv("./Results_data/result_PID_total_n=" + str(Number_of_patient) + '.csv')
 
 pd_param.hist(density=True)

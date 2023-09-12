@@ -17,7 +17,7 @@ from bokeh.plotting import figure, show
 from bokeh.layouts import row, column
 from bokeh.models import HoverTool
 import matplotlib.pyplot as plt
-
+from tqdm import tqdm
 # Local imports
 from estimators import EKF
 from controller import NMPC
@@ -75,8 +75,8 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
     BIS_param_nominal = George_nominal.hill_param
     BIS_param_nominal[4] = George.hill_param[4]
 
-    Ap = George_nominal.propo_pk.continuous_sys.A[:4,:4]
-    Ar = George_nominal.remi_pk.continuous_sys.A[:4,:4]
+    Ap = George_nominal.propo_pk.continuous_sys.A[:4, :4]
+    Ar = George_nominal.remi_pk.continuous_sys.A[:4, :4]
     Bp = George_nominal.propo_pk.continuous_sys.B[:4]
     Br = George_nominal.remi_pk.continuous_sys.B[:4]
     A_nom = block_diag(Ap, Ar)
@@ -143,8 +143,9 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
             BIS_cible_MPC[i] = MPC_controller.internal_target
 
     elif style == 'total':
-        N_simu = int(60 / ts) * 60
+        N_simu = int(25 / ts) * 60
         BIS = np.zeros(N_simu)
+        BIS_cible_MPC = np.zeros(N_simu)
         BIS_EKF = np.zeros(N_simu)
         MAP = np.zeros(N_simu)
         CO = np.zeros(N_simu)
@@ -154,25 +155,32 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
         Xr = np.zeros((4, N_simu))
         Xp_EKF = np.zeros((4, N_simu))
         Xr_EKF = np.zeros((4, N_simu))
-        uP = 1
-        uR = 1
+        uP = 1e-3
+        uR = 1e-3
         for i in range(N_simu):
 
-            Dist = pas.compute_disturbances(i * ts, 'realistic')
-            Bis, Co, Map, _, _ = George.one_step(uP, uR, dist=Dist, noise=True)
+            Dist = pas.compute_disturbances(i * ts, 'step', end_step=15*60)
+            Bis, Co, Map, _, = George.one_step(uP, uR, dist=Dist, noise=True)
             Xp[:, i] = George.propo_pk.x[:4]
             Xr[:, i] = George.remi_pk.x[:4]
-
+            if type(Bis) == np.ndarray:
+                Bis = Bis[0]
             BIS[i] = Bis
-            MAP[i] = Map
-            CO[i] = Co
+            MAP[i] = Map[0]
+            CO[i] = Co[0]
             Up[i] = uP
             Ur[i] = uR
             # estimation
             X, BIS_EKF[i] = estimator.estimate([uP, uR], BIS[i])
             Xp_EKF[:, i] = X[:4]
             Xr_EKF[:, i] = X[4:]
+            # X_MPC = np.concatenate((Xp[:,i],Xr[:,i]),axis = 0)
+            if i == 90:  # or (BIS_EKF[i]<50 and MPC_controller.ki==0):
+                MPC_controller.ki = ki_mpc
+                BIS_cible = 50
+            X = np.clip(X, a_min=0, a_max=1e10)
             uP, uR = MPC_controller.one_step(X, BIS_cible, BIS_EKF[i])
+            BIS_cible_MPC[i] = MPC_controller.internal_target
 
     error = BIS - BIS_cible
     IAE = np.sum(np.abs(error))
@@ -182,12 +190,12 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list,
 
 
 # %% Table simultation
-Patient_table = pd.read_csv('./Patient_table.csv')
+Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 # Simulation parameters
 
 MPC_param = [30, 30, 10**(1)*np.diag([10, 1]), 0.02]
 EKF_param = [1, -1, 1]
-phase = 'induction'
+phase = 'total'
 ts = 2
 
 
@@ -202,10 +210,9 @@ def one_simu(i):
 
 
 t0 = time.time()
-pool_obj = multiprocessing.Pool(8)
-result = pool_obj.map(one_simu, range(1, len(Patient_table)+1))
-pool_obj.close()
-pool_obj.join()
+with multiprocessing.Pool(8) as p:
+    result = list(tqdm(p.imap(one_simu, range(1, len(Patient_table)+1)), total=len(Patient_table), desc='Simulation'))
+
 t1 = time.time()
 print('one_step time: ' + str((t1-t0)*8/(len(result[0][1][0])*13)))
 
@@ -216,8 +223,7 @@ p1 = figure(width=900, height=300)
 p2 = figure(width=900, height=300)
 p3 = figure(width=900, height=300)
 p4 = figure(width=900, height=300)
-for i in range(len(Patient_table)):
-    print(i)
+for i in tqdm(range(len(Patient_table)), total=len(Patient_table), desc='display'):
     # Patient_info = Patient_table[i][1:]
     # IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
     IAE = result[i][0]

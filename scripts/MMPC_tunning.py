@@ -18,6 +18,7 @@ from bokeh.plotting import figure, show
 from bokeh.layouts import row, column
 from bokeh.models import HoverTool
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Local imports
 from estimators import EKF
@@ -182,44 +183,70 @@ def simu(Patient_info: list, style: str, MPC_param: list, EKF_param: list, MMPC_
             Ur[i] = uR
             step_time_max = max(step_time_max, end - start)
     elif style == 'total':
-        N_simu = int(30 / ts) * 60
+        N_simu = int(25 / ts) * 60
+        BIS = np.zeros(N_simu)
         BIS_cible_MPC = np.zeros(N_simu)
         best_model_id = np.zeros(N_simu)
-        Xp_EKF = np.zeros((4 * model_number, N_simu))
-        Xr_EKF = np.zeros((4 * model_number, N_simu))
+        MAP = np.zeros(N_simu)
+        CO = np.zeros(N_simu)
+        Up = np.zeros(N_simu)
+        Ur = np.zeros(N_simu)
+        Xp = np.zeros((4, N_simu))
+        Xr = np.zeros((4, N_simu))
+        Xp_EKF = np.zeros((4, N_simu))
+        Xr_EKF = np.zeros((4, N_simu))
         uP = 1e-3
         uR = 1e-3
+        step_time_max = 0
         for i in range(N_simu):
 
-            Dist = pas.compute_disturbances(i*ts, 'step')
-            Bis, Co, Map, _ = George.one_step(uP, uR, dist=Dist, noise=False)
+            Dist = pas.compute_disturbances(i * ts, 'step', end_step=15*60)
+            Bis, Co, Map, _, = George.one_step(uP, uR, dist=Dist, noise=True)
+            Xp[:, i] = George.propo_pk.x[:4]
+            Xr[:, i] = George.remi_pk.x[:4]
+            if type(Bis) == np.ndarray:
+                Bis = Bis[0]
+            BIS[i] = Bis
+            MAP[i] = Map[0]
+            CO[i] = Co[0]
+            Up[i] = uP
+            Ur[i] = uR
             if i == N_simu - 1:
                 break
             # control
-            if i > 120/ts:
+            if i == 90:  # or (BIS_EKF[i]<50 and MPC_controller.ki==0):
                 for j in range(model_number):
-                    MMPC.controller_list[j].ki = ki_mpc
-            U, best_model = MMPC.one_step([uP, uR], Bis)
+                    Controller.controller_list[j].ki = ki_mpc
+            if i == 8*60/ts:
+                Controller.hysteresis *= 100
+            start = time.perf_counter()
+            U, best_model = Controller.one_step([uP, uR], np.array([Bis]))
+            end = time.perf_counter()
+            Xp_EKF[:, i] = Estimator_list[13].x[:4]
+            Xr_EKF[:, i] = Estimator_list[13].x[4:]
             best_model_id[i] = best_model
             uP = U[0]
             uR = U[1]
+            Up[i] = uP
+            Ur[i] = uR
+            step_time_max = max(step_time_max, end - start)
 
     IAE = np.sum(np.abs(BIS - BIS_cible))
-    print("Estimated paramaters:")
-    print(np.array(BIS_parameters[best_model]).round(3))
-    print("Real paramaters:")
-    print(np.array(George.hill_param).round(3))
+    # print("Estimated paramaters:")
+    # print(np.array(BIS_parameters[best_model]).round(3))
+    # print("Real paramaters:")
+    # print(np.array(George.hill_param).round(3))
     return (IAE, [BIS, MAP, CO, Up, Ur, BIS_cible_MPC, Xp_EKF, Xr_EKF, best_model_id, Xp, Xr, step_time_max], George.hill_param)
 
 
 # %% Table simultation
-Patient_table = pd.read_csv('./Patient_table.csv')
+Patient_table = pd.read_csv('./scripts/Patient_table.csv')
 # Simulation parameters
 
 MPC_param = [30, 30, 10**(0.55)*np.diag([10, 1]), 0.02]
-EKF_param = [1, -1, -1]
+EKF_param = [1, -1, 0]
 MMPC_param = [30, 0, 1, 0.05, 30]
-phase = 'induction'
+phase = 'total'
 ts = 2
 
 
@@ -234,10 +261,12 @@ def one_simu(i):
 
 
 # t0 = time.time()
-# pool_obj = multiprocessing.Pool(8)
-# result = pool_obj.map(one_simu, range(1, 15))
-# pool_obj.close()
-# pool_obj.join()
+with multiprocessing.Pool(8) as p:
+    result = list(tqdm(p.imap(one_simu, range(1, len(Patient_table)+1)), total=len(Patient_table), desc='Simulation'))
+# pool = multiprocessing.Pool(8)
+# result = list(pool.map(one_simu, range(1, len(Patient_table)+1)))
+# pool.close()
+# pool.join()
 # t1 = time.time()
 # print('one_step time: ' + str((t1-t0)*8/(len(result[0][1][0])*13)))
 
@@ -250,29 +279,29 @@ p3 = figure(width=900, height=300)
 p4 = figure(width=900, height=300)
 time_simulation = []
 step_time_max = 0
-for i in range(16):  # len(Patient_table)):
-    print(i+1)
-    Patient_info = Patient_table.loc[i].to_numpy()[1:]
-    IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
-    step_time_max = max(step_time_max, data[-1])
-    # IAE = result[i][0]
-    # data = result[i][1]
-    # BIS_param = result[i][2]
+for i in tqdm(range(16), total=16):  # len(Patient_table)):
+    # print(i+1)
+    # Patient_info = Patient_table.loc[i].to_numpy()[1:]
+    # IAE, data, BIS_param = simu(Patient_info, phase, MPC_param, EKF_param, MMPC_param)
 
+    IAE = result[i][0]
+    data = result[i][1]
+    BIS_param = result[i][2]
+    step_time_max = max(step_time_max, data[-1])
     Xp_EKF = data[6]
     Xp = data[9]
     Xr_EKF = data[7]
     Xr = data[10]
-    fig, axs = plt.subplots(8, figsize=(14, 16))
-    for i in range(4):
-        axs[i].plot(Xp[i, :], '-')
-        axs[i].plot(Xp_EKF[i, :], '-')
-        axs[i].set(xlabel='t', ylabel='$xp_' + str(i+1) + '$')
-        plt.grid()
-        axs[i+4].plot(Xr[i, :], '-')
-        axs[i+4].plot(Xr_EKF[i, :], '-')
-        axs[i+4].set(xlabel='t', ylabel='$xr_' + str(i+1) + '$')
-    plt.show()
+    # fig, axs = plt.subplots(8, figsize=(14, 16))
+    # for i in range(4):
+    #     axs[i].plot(Xp[i, :], '-')
+    #     axs[i].plot(Xp_EKF[i, :], '-')
+    #     axs[i].set(xlabel='t', ylabel='$xp_' + str(i+1) + '$')
+    #     plt.grid()
+    #     axs[i+4].plot(Xr[i, :], '-')
+    #     axs[i+4].plot(Xr_EKF[i, :], '-')
+    #     axs[i+4].set(xlabel='t', ylabel='$xr_' + str(i+1) + '$')
+    # plt.show()
     source = pd.DataFrame(data=data[0], columns=['BIS'])
     source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
     source.insert(len(source.columns), "Ce50_P", BIS_param[0])
@@ -299,7 +328,11 @@ for i in range(16):  # len(Patient_table)):
             line_color="#f46d43", legend_label='remifentanil (ng/min)')
     p3.line(np.arange(0, len(data[8]))*ts/60, data[8], legend_label='Best model id')
     p4.line(data[9][3], data[10][3])
-    TT, BIS_NADIR, ST10, ST20, US = pas.compute_control_metrics(np.arange(0, len(data[8]))*ts, data[0], phase=phase)
+    if phase == 'induction':
+        TT, BIS_NADIR, ST10, ST20, US = pas.compute_control_metrics(np.arange(0, len(data[8]))*ts, data[0], phase=phase)
+    else:
+        TT, BIS_NADIR, ST10, ST20, US, TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.compute_control_metrics(
+            np.arange(0, len(data[8]))*ts, data[0], phase=phase, end_step=15*60)
     TT_list.append(TT)
     ST10_list.append(ST10)
     IAE_list.append(IAE)

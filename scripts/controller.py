@@ -110,11 +110,11 @@ class PID():
         # Visioli, A. (2006). Anti-windup strategies. Practical PID control, 35-60.
         if (control_input >= self.umax) and control_input * error <= 0:
             self.integral_part = self.umax / self.Kp - error - self.derivative_part
-            control_input = self.umax
+            control_input = np.array(self.umax)
 
         elif (control_input <= self.umin) and control_input * error <= 0:
             self.integral_part = self.umin / self.Kp - error - self.derivative_part
-            control_input = self.umin
+            control_input = np.array(self.umin)
 
         return control_input
 
@@ -145,7 +145,7 @@ class NMPC:
         Nu : int, optional
             Control horizon of the controller. The default is 10.
         R : list, optional
-            COst matrix of the input amplitude. The default is np.diag([2, 1]).
+            Cost matrix of the input amplitude. The default is np.diag([2, 1]).
         umax : list, optional
             maximum value for the control inputs. The default is [1e10]*2.
         umin : list, optional
@@ -164,9 +164,6 @@ class NMPC:
         """
         Ad, Bd = discretize(A, B, ts)
         self.BIS_param = BIS_param
-        C50p = BIS_param[0]
-        C50r = BIS_param[1]
-        gamma = BIS_param[2]
         beta = BIS_param[3]
         E0 = BIS_param[4]
         Emax = BIS_param[5]
@@ -184,20 +181,20 @@ class NMPC:
         prop = cas.MX.sym('prop')  # Propofol infusion rate [mg/ml/min]
         rem = cas.MX.sym('rem')  # Remifentanil infusion rate [mg/ml/min]
         u = cas.vertcat(prop, rem)
-
+        bis_param_cas = cas.MX.sym('bis_param_cas', 3)
         # declare CASADI functions
         xpred = cas.MX(Ad) @ x + cas.MX(Bd) @ u
         self.Pred = cas.Function('Pred', [x, u], [xpred], ['x', 'u'], ['x+'])
 
-        up = x[3] / C50p
-        ur = x[7] / C50r
+        up = x[3] / bis_param_cas[0]
+        ur = x[7] / bis_param_cas[1]
         Phi = up/(up + ur + 1e-6)
         U_50 = 1 - beta * (Phi - Phi**2)
         i = (up + ur)/U_50
 
-        bis = E0 - Emax * i ** gamma / (1 + i ** gamma)
+        bis = E0 - Emax * i ** bis_param_cas[2] / (1 + i ** bis_param_cas[2])
 
-        self.Output = cas.Function('Output', [x], [bis], ['x'], ['bis'])
+        self.Output = cas.Function('Output', [x, bis_param_cas], [bis], ['x', 'bis_param_cas'], ['bis'])
 
         self.U_prec = [0]*N*2
         # integrator
@@ -235,7 +232,7 @@ class NMPC:
                 U_prec = w[-2]
 
             Xk = Pred['x+']
-            Hk = self.Output(x=Xk)
+            Hk = self.Output(x=Xk, bis_param_cas=bis_param_cas)
             bis = Hk['bis']
 
             # J+= ((bis - Bis_target)**2/100 + ((bis - Bis_target - 25)/30)**8)
@@ -256,11 +253,11 @@ class NMPC:
             self.ubg_u += dumax
 
         opts = {'ipopt.print_level': 1, 'print_time': 0, 'ipopt.max_iter': 300}
-        prob = {'f': J, 'p': cas.vertcat(*[X0, Bis_target, U_prec_true]),
+        prob = {'f': J, 'p': cas.vertcat(*[X0, Bis_target, U_prec_true, bis_param_cas]),
                 'x': cas.vertcat(*w), 'g': cas.vertcat(*(gu))}  # +gbis
         self.solver = cas.nlpsol('solver', 'ipopt', prob, opts)
 
-    def one_step(self, x: list, Bis_target: float, Bis_measure: float) -> tuple[float, float]:
+    def one_step(self, x: list, Bis_target: float, Bis_measure: float, bis_param: list = None) -> tuple[float, float]:
         """
         Compute the next optimal control input given the current state of the system and the BIS target.
 
@@ -272,6 +269,8 @@ class NMPC:
             Current BIS target.
         Bis_measure : float
             Last BIS measure.
+        bis_param : list, optional
+            BIS model parameters. The default is None.
 
         Returns
         -------
@@ -292,8 +291,10 @@ class NMPC:
         # Init internal target
         if self.internal_target is None:
             self.internal_target = Bis_target
+        if bis_param is None:
+            bis_param = self.BIS_param[:3]
 
-        sol = self.solver(x0=w0, p=list(x) + [self.internal_target] + list(self.U_prec[0:2]),
+        sol = self.solver(x0=w0, p=list(x) + [self.internal_target] + list(self.U_prec[0:2]) + bis_param,
                           lbx=self.lbw, ubx=self.ubw, lbg=self.lbg_u, ubg=self.ubg_u)
 
         w_opt = sol['x'].full().flatten()
@@ -307,6 +308,228 @@ class NMPC:
 
         # integrator
         self.internal_target = self.internal_target + self.ki * (Bis_target - Bis_measure)
+
+        # print for debug
+        if False:
+            bis = np.zeros(self.N)
+            Xk = x
+            for k in range(self.N):
+                if k < self.Nu-1:
+                    u = w_opt[2*k:2*k+2]
+                else:
+                    u = w_opt[-2:]
+                Pred = self.Pred(x=Xk, u=u)
+                Xk = Pred['x+']
+                Hk = self.Output(x=Xk)
+                bis[k] = float(Hk['bis'])
+
+        if False:
+            fig, axs = plt.subplots(2, figsize=(6, 8))
+            axs[0].plot(Up, label='propofol')
+            axs[0].plot(Ur, label='remifentanil')
+            axs[0].grid()
+            axs[0].legend()
+            axs[1].plot(bis, label='bis')
+            axs[1].plot([self.internal_target]*len(bis), label='bis target')
+            axs[1].grid()
+            axs[1].legend()
+            plt.show()
+
+        return Up[0], Ur[0]
+
+
+class NMPC_integrator:
+    """Implementation of Non-linear MPC for the Coadministration of Propofol and Remifentanil in Anesthesia.
+
+            Parameters
+        ----------
+        A : list
+            Dynamic matric of the continuous system dx/dt = Ax + Bu.
+        B : list
+            Input matric of the continuous system dx/dt = Ax + Bu.
+        BIS_param : list
+            Contains parameters of the non-linear function output BIS_param = [C50p, C50r, gamma, beta, E0, Emax]
+        ts : float, optional
+            Sampling time of the system. The default is 1.
+        N : int, optional
+            Prediction horizon of the controller. The default is 10.
+        Nu : int, optional
+            Control horizon of the controller. The default is 10.
+        R : list, optional
+            Cost matrix of the input amplitude. The default is np.diag([2, 1]).
+        umax : list, optional
+            maximum value for the control inputs. The default is [1e10]*2.
+        umin : list, optional
+            minimum value for the control inputs. The default is [0]*2.
+        dumax : list, optional
+            maximum value for the control inputs rates. The default is [0.2, 0.4].
+        dumin : list, optional
+            minimum value for the control inputs rates. The default is [-0.2, -0.4].
+
+        Returns
+        -------
+        None.
+        """
+
+    def __init__(self, A: list, B: list, BIS_param: list, ts: float = 1,
+                 N: int = 10, Nu: int = 10, R: list = np.diag([2, 1]),
+                 umax: list = [1e10]*2, umin: list = [0]*2,
+                 dumax: list = [0.2, 0.4], dumin: list = [-0.2, -0.4]):
+        """Init NMPC class."""
+        Ad, Bd = discretize(A, B, ts)
+        Ad = np.block([[Ad, np.zeros((8, 1))], [np.zeros((1, 8)), np.eye(1)]])
+        Bd = np.block([[Bd], [np.zeros((1, 2))]])
+        self.BIS_param = BIS_param
+        beta = BIS_param[3]
+        E0 = BIS_param[4]
+        Emax = BIS_param[5]
+
+        self.umax = umax
+        self.umin = umin
+        self.dumin = dumin
+        self.dumax = dumax
+        self.R = R  # control cost
+        self.N = N  # horizon
+        self.Nu = Nu
+
+        # declare CASADI variables
+        x = cas.MX.sym('x', 9)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
+        prop = cas.MX.sym('prop')  # Propofol infusion rate [mg/ml/min]
+        rem = cas.MX.sym('rem')  # Remifentanil infusion rate [mg/ml/min]
+        u = cas.vertcat(prop, rem)
+        bis_param_cas = cas.MX.sym('bis_param_cas', 3)
+        # declare CASADI functions
+
+        xpred = cas.MX(Ad) @ x + cas.MX(Bd) @ u
+        self.Pred = cas.Function('Pred', [x, u], [xpred], ['x', 'u'], ['x+'])
+
+        up = x[3] / bis_param_cas[0]
+        ur = x[7] / bis_param_cas[1]
+        Phi = up/(up + ur + 1e-6)
+        U_50 = 1 - beta * (Phi - Phi**2)
+        i = (up + ur)/U_50
+
+        bis = E0 - Emax * i ** bis_param_cas[2] / (1 + i ** bis_param_cas[2]) + x[8]
+
+        self.Output = cas.Function('Output', [x, bis_param_cas], [bis], ['x', 'bis_param_cas'], ['bis'])
+
+        self.U_prec = [0]*N*2
+        self.internal_target = None
+
+        # Optimization problem definition
+        w = []
+        self.lbw = []
+        self.ubw = []
+        J = 0
+        gu = []
+        gbis = []
+        self.lbg_u = []
+        self.ubg_u = []
+        self.lbg_bis = []
+        self.ubg_bis = []
+
+        X0 = cas.MX.sym('X0', 9)
+        Bis_target = cas.MX.sym('Bis_target')
+        U_prec_true = cas.MX.sym('U_prec', 2)
+        R = cas.MX.sym('R', 2)
+        Xk = X0
+        for k in range(self.N):
+            if k <= self.Nu-1:
+                U = cas.MX.sym('U', 2)
+                w += [U]
+                self.lbw += self.umin
+                self.ubw += self.umax
+            if k == 0:
+                Pred = self.Pred(x=X0, u=U)
+                U_prec = U_prec_true
+            elif k > self.Nu-1:
+                Pred = self.Pred(x=Xk, u=U)
+                U_prec = U
+            else:
+                Pred = self.Pred(x=Xk, u=U)
+                U_prec = w[-2]
+
+            Xk = Pred['x+']
+            Hk = self.Output(x=Xk, bis_param_cas=bis_param_cas)
+            bis = Hk['bis']
+
+            # J+= ((bis - Bis_target)**2/100 + ((bis - Bis_target - 25)/30)**8)
+            #    + (U-U_prec).T @ self.R @ (U-U_prec)
+
+            # Ju = ((U-U_prec).T @ self.R @ (U-U_prec)/100 +
+            #       (((U-U_prec).T @ self.R @ (U-U_prec)+10)/10)**4)
+
+            # J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) + Ju
+
+            J += (bis - Bis_target)**2 + ((U).T @ cas.diag(R) @ (U))**2
+            # if k == self.N-1:
+            #     J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) * 1e3
+
+            gu += [U-U_prec]
+            gbis += [bis]
+            self.lbg_u += dumin
+            self.ubg_u += dumax
+            self.lbg_bis += [30]
+            self.ubg_bis += [100]
+
+        opts = {'ipopt.print_level': 1, 'print_time': 0, 'ipopt.max_iter': 300}
+        prob = {'f': J, 'p': cas.vertcat(*[X0, Bis_target, U_prec_true, bis_param_cas, R]),
+                'x': cas.vertcat(*w), 'g': cas.vertcat(*(gu+gbis))}  #
+        self.solver = cas.nlpsol('solver', 'ipopt', prob, opts)
+
+    def one_step(self, x: list, Bis_target: float, bis_param: list = None, R: list = None) -> tuple[float, float]:
+        """
+        Compute the next optimal control input given the current state of the system and the BIS target.
+
+        Parameters
+        ----------
+        x : list
+            Last state estimation.
+        Bis_target : float
+            Current BIS target.
+        bis_param : list, optional
+            BIS model parameters. The default is None.
+
+        Returns
+        -------
+        Up : float
+            Propofol rates for the next sample time.
+        Ur : float
+            Remifentanil rates for the next sample time.
+
+        """
+        # the init point of the optimization proble is the previous optimal solution
+        w0 = []
+        for k in range(self.Nu):
+            if k < self.Nu-1:
+                w0 += self.U_prec[2*(k+1):2*(k+1)+2]
+            else:
+                w0 += self.U_prec[2*k:2*k+2]
+
+        # Init internal target
+        self.internal_target = Bis_target
+        if bis_param is None:
+            bis_param = self.BIS_param[:3]
+
+        if R is not None:
+            self.R = R
+
+        sol = self.solver(x0=w0,
+                          p=list(x) + [self.internal_target] + list(self.U_prec[0:2]) +
+                          bis_param + list(np.diag(self.R)),
+                          lbx=self.lbw,
+                          ubx=self.ubw,
+                          lbg=self.lbg_u + self.lbg_bis,
+                          ubg=self.ubg_u + self.ubg_bis)
+
+        w_opt = sol['x'].full().flatten()
+
+        Up = w_opt[::2]
+        Ur = w_opt[1::2]
+        self.U_prec = list(w_opt)
+
+        Hk = self.Output(x=x)
+        bis = float(Hk['bis'])
 
         # print for debug
         if False:
@@ -390,7 +613,8 @@ class MMPC():
         self.ts = estimator_list[0].ts
         # Init internal variables
         self.error = np.zeros(self.N_model)
-        self.X = np.zeros((self.N_model, self.window_length, 8))
+        size_state = len(estimator_list[0].x)
+        self.X = np.zeros((self.N_model, self.window_length, size_state))
         self.Up = np.zeros(self.window_length-1)
         self.Ur = np.zeros(self.window_length-1)
         self.BIS = np.zeros(self.window_length)
