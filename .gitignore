@@ -7,3 +7,5 @@ Results_Images/
 BIS_parameters.csv
 
 Patient_table.csv
+
+.env/
