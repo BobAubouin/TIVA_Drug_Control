@@ -169,7 +169,7 @@ def simu(Patient_info: list, style: str, PID_param: list,
 # Patient table:
 # index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
 np.random.seed(0)
-case_list = np.random.randint(0, 500, 16)
+case_list = np.random.randint(0, 500, 10)
 
 
 # phase = 'maintenance'

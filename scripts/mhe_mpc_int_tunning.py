@@ -229,6 +229,12 @@ MPC_param_list = list(product(N_mpc_list, R_list))
 with mp.Pool(8) as pool:
     IAE_list = list(tqdm(pool.map(partial(cost, MHE_param=MHE_param), MPC_param_list), total=len(MPC_param_list)))
 
+N_value = [MPC_param_list[i][0] for i in range(len(MPC_param_list))]
+R_value = [np.log10(MPC_param_list[i][1]) for i in range(len(MPC_param_list))]
+
+df = pd.DataFrame({'N': N_value, 'R': R_value, 'IAE': IAE_list})
+df.to_csv('Results_data/tunning_MPC.csv')
+
 # %% plot tunning
 
 # plot config
@@ -248,8 +254,7 @@ matplotlib.rc('font', **font)
 fig, host = plt.subplots(figsize=(10, 5))
 
 ynames = ['$N_{MPC}$', '$\log_{10}(R)$', 'IAE']
-N_value = [MPC_param_list[i][0] for i in range(len(MPC_param_list))]
-R_value = [np.log10(MPC_param_list[i][1]) for i in range(len(MPC_param_list))]
+
 
 # organize the data
 ys = np.array([N_value, R_value, IAE_list]).T
