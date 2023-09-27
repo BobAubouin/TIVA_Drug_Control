@@ -20,17 +20,18 @@ Number_of_patient = 50
 phase = 'induction'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
-title = '_NMPC'
-title = '_multi_NMPC'
-title = '_MHE_NMPC'
-# title = '_MPC_lin'
-# title = '_PID'
-
+title = 'NMPC'
+title = 'multi_NMPC'
+title = 'MHE_NMPC'
+# title = 'MPC_lin'
+# title = 'PID'
+title = 'NMPC_int_induction'
+title = 'multi_MMPC_int'
 if title == '_PID':
     ts = 1
 else:
     ts = 2
-Data = pd.read_csv("./Results_data/result" + title + "_n=" + str(Number_of_patient) + '.csv')
+Data = pd.read_csv("./Results_data/result_" + title + "_n=" + str(Number_of_patient) + '.csv')
 
 
 if phase == 'induction':

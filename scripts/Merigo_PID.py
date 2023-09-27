@@ -168,7 +168,8 @@ def simu(Patient_info: list, style: str, PID_param: list,
 # %% PSO
 # Patient table:
 # index, Age, H[cm], W[kg], Gender, Ce50p, Ce50r, γ, β, E0, Emax
-Patient_table = pd.read_csv('./scripts/Patient_table.csv')
+np.random.seed(0)
+case_list = np.random.randint(0, 500, 16)
 
 
 # phase = 'maintenance'
@@ -177,8 +178,15 @@ phase = 'induction'
 
 def one_simu(x, ratio, i):
     """Cost of one simulation, i is the patient index."""
-    Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
-    iae, _, _ = simu(Patient_info, phase, [x[0], x[1], x[2], ratio])
+    np.random.seed(i)
+    # Generate random patient information with uniform distribution
+    age = np.random.randint(low=18, high=70)
+    height = np.random.randint(low=150, high=190)
+    weight = np.random.randint(low=50, high=100)
+    gender = np.random.randint(low=0, high=2)
+
+    Patient_info = [age, height, weight, gender] + [None] * 6
+    iae, _, _ = simu(Patient_info, phase, [x[0], x[1], x[2], ratio], random_PD=True, random_PK=True)
     return iae
 
 
@@ -190,7 +198,7 @@ def cost(x, ratio):
     """
     pool_obj = mp.Pool()
     func = partial(one_simu, x, ratio)
-    IAE = pool_obj.map(func, range(1, 17))
+    IAE = pool_obj.map(func, case_list)
     pool_obj.close()
     pool_obj.join()
 

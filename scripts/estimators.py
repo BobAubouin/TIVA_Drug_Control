@@ -404,12 +404,12 @@ class EKF_integrator:
             BIS value predicted by the model over the interval.
 
         """
-        U = np.concatenate((up, ur), axis=0)
+        U = np.concatenate(([up], [ur]), axis=0)
         # x = np.expand_dims(x, axis=1)
-        _, yout, _ = ctrl.forced_response(self.sys, U=U, X0=[x], return_x=False)
+        _, yout = ctrl.forced_response(self.sys, U=U, X0=x, return_x=False)
         bis = self.output(x=x)
         BIS_list = [float(bis['bis'])]
-        for i in range(len(yout)):
+        for i in range(len(yout[0])):
             bis = self.output(x=yout[:, i])
             BIS_list.append(float(bis['bis']))
         return np.array(BIS_list)
