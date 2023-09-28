@@ -6,5 +6,4 @@ filterpy==1.4.5
 numpy
 scipy
 matplotlib
-pyswarm==0.6
 tqdm

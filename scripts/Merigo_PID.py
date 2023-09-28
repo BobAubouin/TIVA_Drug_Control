@@ -196,12 +196,10 @@ def cost(x, ratio):
     x = [Kp, Ti, Td]
     IAE is the maximum integrated absolut error over the patient population.
     """
-    pool_obj = mp.Pool()
-    func = partial(one_simu, x, ratio)
-    IAE = pool_obj.map(func, case_list)
-    pool_obj.close()
-    pool_obj.join()
 
+    func = partial(one_simu, x, ratio)
+    IAE = map(func, case_list)
+    
     return max(IAE)
 
 
@@ -217,7 +215,7 @@ except:
         lb = [1e-6, 100, 0.1]
         ub = [1, 300, 20]
         # Default: 100 particles as in the article
-        xopt, fopt = pso(local_cost, lb, ub, debug=True, minfunc=1e-2)
+        xopt, fopt = pso(local_cost, lb, ub, debug=True, minfunc=1e-2, processes = mp.cpu_count())
         param_opti = pd.concat((param_opti, pd.DataFrame(
             {'ratio': ratio, 'Kp': xopt[0], 'Ti': xopt[1], 'Td': xopt[2]}, index=[0])), ignore_index=True)
         print(ratio)
@@ -226,74 +224,9 @@ except:
     else:
         param_opti.to_csv('./scripts/optimal_parameters_PID.csv')
 
-# %%test on patient table
-phase = 'total'
+# %%test on all the patients
 ts = 1
-IAE_list = []
-TT_list = []
-p1 = figure(width=900, height=300)
-p2 = figure(width=900, height=300)
-p3 = figure(width=900, height=300)
 
-for ratio in range(2, 3):
-    print('ratio = ' + str(ratio))
-    Kp = float(param_opti.loc[param_opti['ratio'] == ratio, 'Kp'])
-    Ti = float(param_opti.loc[param_opti['ratio'] == ratio, 'Ti'])
-    Td = float(param_opti.loc[param_opti['ratio'] == ratio, 'Td'])
-    PID_param = [Kp, Ti, Td, ratio]
-    for i in tqdm(range(1, 14)):
-        Patient_info = Patient_table.loc[i-1].to_numpy()[1:]
-        IAE, data, BIS_param = simu(Patient_info, phase, PID_param)
-        source = pd.DataFrame(data=data[0], columns=['BIS'])
-        source.insert(len(source.columns), "time", np.arange(0, len(data[0]))*ts/60)
-        source.insert(len(source.columns), "Ce50_P", BIS_param[0])
-        source.insert(len(source.columns), "Ce50_R", BIS_param[1])
-        source.insert(len(source.columns), "gamma", BIS_param[2])
-        source.insert(len(source.columns), "beta", BIS_param[3])
-        source.insert(len(source.columns), "E0", BIS_param[4])
-        source.insert(len(source.columns), "Emax", BIS_param[5])
-
-        plot = p1.line(x='time', y='BIS', source=source, width=2)
-        tooltips = [('Ce50_P', "@Ce50_P"), ('Ce50_R', "@Ce50_R"),
-                    ('gamma', "@gamma"), ('beta', "@beta"),
-                    ('E0', "@E0"), ('Emax', "@Emax")]
-        p1.add_tools(HoverTool(renderers=[plot], tooltips=tooltips))
-        p2.line(np.arange(0, len(data[0]))*ts/60,
-                data[1], legend_label='MAP (mmgh)')
-        p2.line(np.arange(0, len(data[0]))*ts/60, data[2]*10,
-                legend_label='CO (cL/min)', line_color="#f46d43")
-        p3.line(np.arange(0, len(data[3]))*ts/60, data[3],
-                line_color="#006d43", legend_label='propofol (mg/min)', width=2)
-        p3.line(np.arange(0, len(data[4]))*ts/60, data[4],
-                line_color="#f46d43", legend_label='remifentanil (ng/min)', width=2)
-        if phase == 'induction':
-            TT, BIS_NADIR, ST10, ST20, US = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
-                                                                                data[0], phase=phase)
-            TT_list.append(TT)
-        elif phase == 'maintenance':
-            TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(np.arange(0, len(data[0]))*ts,
-                                                                                   data[0], phase=phase)
-        else:  # total
-            TT, BIS_NADIR, ST10, ST20, US, TTp, BIS_NADIRp, TTn, BIS_NADIRn = pas.metrics.compute_control_metrics(
-                np.arange(0, len(data[0]))*ts, data[0], phase=phase)
-            TT_list.append(TTp)
-        IAE_list.append(IAE)
-p1.title.text = 'BIS'
-p3.title.text = 'Infusion rates'
-p3.xaxis.axis_label = 'Time (min)'
-grid = row(column(p3, p1, p2))
-
-show(grid)
-
-print("Mean IAE : " + str(np.mean(IAE_list)))
-print("Mean TT : " + str(np.mean(TT_list)))
-print("Min TT : " + str(np.min(TT_list)))
-print("Max TT : " + str(np.max(TT_list)))
-
-# %% Intra patient variability
-
-# Simulation parameter
-phase = 'total'
 ratio = 2
 Number_of_patient = 500
 # Controller parameters
