@@ -25,6 +25,7 @@ from functools import partial
 from itertools import product
 
 # Local imports
+from pyswarm import pso
 from estimators import MHE_integrator as MHE
 from controller import NMPC_integrator as NMPC
 import python_anesthesia_simulator as pas
@@ -183,7 +184,7 @@ phase = 'induction'
 ts = 2
 
 MPC_param = [30, 30, 10**(1)*np.diag([10, 1])]
-N_mpc_list = [20, 30, 40]
+N_mpc = 30
 R_list = [el*np.diag([10, 1]) for el in np.logspace(0, 2, 3)]
 
 
@@ -215,114 +216,92 @@ def one_simu(i, MPC_param, MHE_param):
     return IAE
 
 
-def cost(MPC_param, MHE_param):
+def cost(R, N_mpc, MHE_param):
     IAE_list = []
     for i in case_list:
-        IAE_list.append(one_simu(i, MPC_param, MHE_param))
+        IAE_list.append(one_simu(i, [N_mpc, 10**R*np.diag([10, 1])], MHE_param))
     return max(IAE_list)
 
 # %% tunning
 
 
-MPC_param_list = list(product(N_mpc_list, R_list))
-
-with mp.Pool(8) as pool:
-    IAE_list = list(tqdm(pool.map(partial(cost, MHE_param=MHE_param), MPC_param_list), total=len(MPC_param_list)))
-
-N_value = [MPC_param_list[i][0] for i in range(len(MPC_param_list))]
-R_value = [np.log10(MPC_param_list[i][1]) for i in range(len(MPC_param_list))]
-
-df = pd.DataFrame({'N': N_value, 'R': R_value, 'IAE': IAE_list})
-df.to_csv('Results_data/tunning_MPC.csv')
+try:
+    if phase == 'maintenance':
+        param_opti = pd.read_csv('./scripts/optimal_parameters_MPC_reject.csv')
+    else:
+        param_opti = pd.read_csv('./scripts/optimal_parameters_MPC.csv')
+except:
+    param_opti = pd.DataFrame(columns=['N_mpc', 'R'])
+    for ratio in range(2, 3):
+        def local_cost(x): return cost(x, ratio)
+        lb = [1]
+        ub = [3]
+        f_cost = partial(cost, N_mpc=N_mpc, MHE_param=MHE_param)
+        xopt, fopt = pso(cost, lb, ub, debug=True, minfunc=1e-2, swarmsize=3, processes=mp.cpu_count())
+        param_opti = pd.concat((param_opti, pd.DataFrame(
+            {'N_mpc': N_mpc, 'R': R}, index=[0])), ignore_index=True)
+        print(ratio)
+    if phase == 'maintenance':
+        param_opti.to_csv('./scripts/optimal_parameters_MPC_reject.csv')
+    else:
+        param_opti.to_csv('./scripts/optimal_parameters_MPC.csv')
 
 # %% plot tunning
 
-# plot config
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
-
-font = {'family': 'serif',
-        'weight': 'normal',
-        'size': 16}
-
-plt.rc('text', usetex=True)
-matplotlib.rc('font', **font)
+Number_of_patient = 500
+# Controller parameters
+R = param_opti['R'][0]
+N_mpc = param_opti['N_mpc'][0]
+MPC_param = [N_mpc, 10**R*np.diag([10, 1])]
 
 
-# %% Plot results
-
-fig, host = plt.subplots(figsize=(10, 5))
-
-ynames = ['$N_{MPC}$', '$\log_{10}(R)$', 'IAE']
+df = pd.DataFrame()
+pd_param = pd.DataFrame()
+name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
 
 
-# organize the data
-ys = np.array([N_value, R_value, IAE_list]).T
-ymins = ys.min(axis=0)
-ymaxs = ys.max(axis=0)
-dys = ymaxs - ymins
-ymins -= dys * 0.05  # add 5% padding below and above
-ymaxs += dys * 0.05
-dys = ymaxs - ymins
+def one_simu(i):
+    np.random.seed(i)
+    # Generate random patient information with uniform distribution
+    age = np.random.randint(low=18, high=70)
+    height = np.random.randint(low=150, high=190)
+    weight = np.random.randint(low=50, high=100)
+    gender = np.random.randint(low=0, high=2)
 
-# transform all data to be compatible with the main axis
-zs = np.zeros_like(ys)
-zs[:, 0] = ys[:, 0]
-zs[:, 1:] = (ys[:, 1:] - ymins[1:]) / dys[1:] * dys[0] + ymins[0]
+    Patient_info = [age, height, weight, gender] + [None] * 6
+    _, data, bis_param = simu(Patient_info, phase, MPC_param, MHE_param, random_PD=True, random_PK=True)
+    return Patient_info, data, bis_param
 
 
-axes = [host] + [host.twinx() for i in range(ys.shape[1] - 1)]
-for i, ax in enumerate(axes):
-    ax.set_ylim(ymins[i], ymaxs[i])
-    ax.spines['top'].set_visible(False)
-    ax.spines['bottom'].set_visible(False)
-    if ax != host:
-        ax.spines['left'].set_visible(False)
-        ax.yaxis.set_ticks_position('right')
-        ax.spines["right"].set_position(("axes", i / (ys.shape[1] - 1)))
+with mp.Pool(mp.cpu_count()) as p:
+    r = list(tqdm(p.imap(one_simu, range(Number_of_patient)), total=Number_of_patient))
 
-    # if i == 0:
-    #     ax.set_yscale('log')
 
-host.set_xlim(0, ys.shape[1] - 1)
-host.set_xticks(range(ys.shape[1]))
-host.set_xticklabels(ynames, fontsize=14)
-host.tick_params(axis='x', which='major', pad=7)
-host.spines['right'].set_visible(False)
-host.xaxis.tick_top()
-# host.set_title('Parallel Coordinates Plot', fontsize=18)
+for i in tqdm(range(Number_of_patient)):
+    Patient_info, data, bis_param = r[i]
+    age = Patient_info[0]
+    height = Patient_info[1]
+    weight = Patient_info[2]
+    gender = Patient_info[3]
 
-up = np.array([248, 123, 0])/255
-down = np.array([0, 200, 14])/255
-min = min(IAE_list)
-max = max(IAE_list)
-for j in range(len(ys)):
-    # to just draw straight lines between the axes:
-    # host.plot(range(ys.shape[1]), zs[j,:], c=colors[(category[j] - 1) % len(colors) ])
+    dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
+    df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-    # create bezier curves
-    # for each axis, there will a control vertex at the point itself, one at 1/3rd towards the previous and one
-    #   at one third towards the next axis; the first and last axis have one less control vertex
-    # x-coordinate of the control vertices: at each integer (for the axes) and two inbetween
-    # y-coordinate: repeat every point three times, except the first and last only twice
-    verts = list(zip([x for x in np.linspace(0, len(ys) - 1, len(ys) * 3 - 2, endpoint=True)],
-                     np.repeat(zs[j, :], 3)[1:-1]))
-    # for x,y in verts: host.plot(x, y, 'go') # to show the control points of the beziers
-    codes = [Path.MOVETO] + [Path.CURVE4 for _ in range(len(verts) - 1)]
-    path = Path(verts, codes)
-    alpha = (IAE_list[j] - min)/(max-min)
-    if alpha == 0:
-        patch = patches.PathPatch(path, facecolor='none', lw=2, edgecolor='#5d88f9ff')
-        patch_min = patch
-    else:
-        patch = patches.PathPatch(path, facecolor='none', lw=1, edgecolor=tuple(up * alpha + down*(1-alpha)), alpha=0.5)
-        host.add_patch(patch)
-host.add_patch(patch_min)
-for i, ax in enumerate(axes):
-    if i < len(ys[0])-1:
-        ax.yaxis.set_ticks(np.round(np.unique(ys[:, i]), 1))
-        ax.yaxis.set_ticklabels(np.round(np.unique(ys[:, i]), 1))
+    dico = {'age': [age],
+            'height': [height],
+            'weight': [weight],
+            'gender': [gender],
+            'C50p': [bis_param[0]],
+            'C50r': [bis_param[1]],
+            'gamma': [bis_param[2]],
+            'beta': [bis_param[3]],
+            'Emax': [bis_param[4]],
+            'E0': [bis_param[5]]}
+    pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
 
-plt.tight_layout()
-plt.savefig(f'Results_Images/tunning_MPC.pdf', bbox_inches='tight', format='pdf')
-plt.show()
+if phase == 'maintenance':
+    df.to_csv("./Results_data/result_MPC_maintenance_n=" + str(Number_of_patient) + '.csv')
+elif phase == 'induction':
+    df.to_csv("./Results_data/result_MPC_induction_n=" + str(Number_of_patient) + '.csv')
+else:
+    df.to_csv("./Results_data/result_MPC_total_n=" + str(Number_of_patient) + '.csv')

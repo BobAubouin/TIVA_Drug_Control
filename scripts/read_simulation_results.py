@@ -8,15 +8,13 @@ Created on Tue Nov 22 17:16:03 2022
 # Third party imports
 import pandas as pd
 import numpy as np
-from bokeh.plotting import figure, show
-from bokeh.layouts import row, column
-from bokeh.io import export_svg
+import matplotlib.pyplot as plt
 
 # Local imports
 from python_anesthesia_simulator import metrics
 
 
-Number_of_patient = 50
+Number_of_patient = 500
 phase = 'induction'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
@@ -24,10 +22,10 @@ title = 'NMPC'
 title = 'multi_NMPC'
 title = 'MHE_NMPC'
 # title = 'MPC_lin'
-# title = 'PID'
-title = 'NMPC_int_induction'
-title = 'multi_MMPC_int'
-if title == '_PID':
+title = 'PID'
+# title = 'NMPC_int_induction'
+# title = 'multi_MMPC_int'
+if title == 'PID':
     ts = 1
 else:
     ts = 2
@@ -47,9 +45,6 @@ elif phase == 'maintenance':
     BIS_NADIRp_list = []
     BIS_NADIRn_list = []
 
-p1 = figure(width=900, height=300)
-p2 = figure(width=900, height=300)
-p3 = figure(width=900, height=300)
 
 for i in range(Number_of_patient):  # Number_of_patient
     # for i in range(108, 109):
@@ -57,15 +52,7 @@ for i in range(Number_of_patient):  # Number_of_patient
 
     BIS = Data[str(i) + '_BIS']
     Time = np.arange(0, len(BIS)) * ts / 60
-    p1.line(Time, BIS, legend_label='internal target')
-    # p1.line(np.arange(0,len(data[0]))*5/60, data[5], legend_label='internal target', line_color="#f46d43")
-    p2.line(Time, Data[str(i) + '_MAP'], legend_label='MAP (mmgh)')
-    p2.line(Time, Data[str(i) + '_CO'] * 10,
-            legend_label='CO (cL/min)', line_color="#f46d43")
-    p3.line(Time, Data[str(i) + '_Up'], line_color="#006d43",
-            legend_label='propofol (mg/min)')
-    p3.line(Time, Data[str(i) + '_Ur'], line_color="#f46d43",
-            legend_label='remifentanil (ng/min)')
+    plt.plot(Time, BIS, linewidth=0.5)
 
     if phase == 'induction':
         TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
@@ -83,12 +70,11 @@ for i in range(Number_of_patient):  # Number_of_patient
         BIS_NADIRp_list.append(BIS_NADIRp)
         BIS_NADIRn_list.append(BIS_NADIRn)
 
-p1.title.text = 'BIS'
-p3.title.text = 'Infusion rates'
-p3.xaxis.axis_label = 'Time (min)'
-grid = row(column(p3, p1, p2))
-
-show(grid)
+plt.xlabel('Time (min)')
+plt.ylabel('BIS')
+plt.grid()
+plt.savefig('./Results_Images/BIS_' + title + '_n=' + str(Number_of_patient) + '.pdf')
+plt.show()
 
 result_table = pd.DataFrame()
 result_table.insert(len(result_table.columns), "", ['mean', 'std', 'min', 'max'])
@@ -155,7 +141,3 @@ styler.format(precision=2)
 print(styler.to_latex())
 
 result_table.to_csv("./Results_data/result_table" + title + "_n=" + str(Number_of_patient))
-p1.output_backend = "svg"
-export_svg(p1, filename="./Results_Images/BIS" + title + "_n=" + str(Number_of_patient) + ".svg")
-p3.output_backend = "svg"
-export_svg(p3, filename="./Results_Images/input" + title + "_n=" + str(Number_of_patient) + ".svg")
