@@ -5,7 +5,7 @@ Created on Fri Dec  9 14:22:34 2022
 """
 # Standard import
 import matplotlib
-import pathlib as Path
+import pathlib
 import matplotlib.pyplot as plt
 from matplotlib.path import Path
 import matplotlib.patches as patches
@@ -174,6 +174,32 @@ def simu(Patient_info: list, style: str, MPC_param: list, MHE_param: list,
 
 # %% Inter patient variability
 
+
+def one_simu(i, MPC_param, MHE_param, phase):
+    """Cost of one simulation, i is the patient index."""
+    # Generate random patient information with uniform distribution
+    np.random.seed(i)
+    print(i)
+    age = np.random.randint(low=18, high=70)
+    height = np.random.randint(low=150, high=190)
+    weight = np.random.randint(low=50, high=100)
+    gender = np.random.randint(low=0, high=1)
+
+    Patient_info = [age, height, weight, gender] + [None] * 6
+    IAE, _, _ = simu(Patient_info, phase, MPC_param, MHE_param,
+                     random_PK=True, random_PD=True)
+
+    return IAE
+
+
+def cost(R, N_mpc, MHE_param, case_list, phase):
+    with mp.Pool(mp.cpu_count()) as p:
+        partial_f = partial(one_simu, MPC_param=[N_mpc, 10**R*np.diag([10, 1])], MHE_param=MHE_param, phase=phase)
+        IAE_list = list(p.map(partial_f, case_list))
+
+    return max(IAE_list)
+
+
 if __name__ == '__main__':
     # patient_id for tunning
     np.random.seed(0)
@@ -187,7 +213,6 @@ if __name__ == '__main__':
     N_mpc = 30
     R_list = [el*np.diag([10, 1]) for el in np.logspace(0, 2, 3)]
 
-
     gamma = 1.e-2
     theta = [gamma, 800, 100, 0.005]*4
     theta[4] = gamma/100
@@ -199,39 +224,16 @@ if __name__ == '__main__':
     N_mhe = 25
     MHE_param = [R, Q, theta, N_mhe]
 
-
-    def one_simu(i, MPC_param, MHE_param):
-        """Cost of one simulation, i is the patient index."""
-        # Generate random patient information with uniform distribution
-        np.random.seed(i)
-        age = np.random.randint(low=18, high=70)
-        height = np.random.randint(low=150, high=190)
-        weight = np.random.randint(low=50, high=100)
-        gender = np.random.randint(low=0, high=1)
-
-        Patient_info = [age, height, weight, gender] + [None] * 6
-        IAE, _, _ = simu(Patient_info, phase, MPC_param, MHE_param,
-                        random_PK=True, random_PD=True)
-
-        return IAE
-
-
-    def cost(R, N_mpc, MHE_param):
-        with mp.Pool(mp.cpu_count()) as p:
-            IAE_list = p.imap(partial(one_simu, MPC_param = [N_mpc, 10**R*np.diag([10, 1])], MHE_param = MHE_param), case_list)
-        
-        return max(IAE_list)
-
     # %% tunning
 
     is_reject = phase == 'maintenance'
-    file = Path(f"./scripts/optimal_parameters_MPC{'_reject' if is_reject else ''}.csv")
+    file = pathlib.Path(f"./scripts/optimal_parameters_MPC{'_reject' if is_reject else ''}.csv")
     if file.exists():
         param_opti = pd.read_csv(file)
     else:
         nb_point = 4
         lb, ub = 1, 3
-        f_cost = partial(cost, N_mpc=N_mpc, MHE_param=MHE_param)
+        f_cost = partial(cost, N_mpc=N_mpc, MHE_param=MHE_param, case_list=case_list, phase=phase)
         IAE_list = list(map(f_cost, np.linspace(lb, ub, nb_point)))
         R_list = np.linspace(lb, ub, nb_point)
         id_min = np.argmin(IAE_list)
@@ -252,11 +254,9 @@ if __name__ == '__main__':
     # N_mpc = param_opti['N_mpc'][0]
     # MPC_param = [N_mpc, 10**R*np.diag([10, 1])]
 
-
     # df = pd.DataFrame()
     # pd_param = pd.DataFrame()
     # name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
-
 
     # def one_simu(i):
     #     np.random.seed(i)
@@ -270,10 +270,8 @@ if __name__ == '__main__':
     #     _, data, bis_param = simu(Patient_info, phase, MPC_param, MHE_param, random_PD=True, random_PK=True)
     #     return Patient_info, data, bis_param
 
-
     # with mp.Pool(mp.cpu_count()) as p:
     #     r = list(tqdm(p.imap(one_simu, range(Number_of_patient)), total=Number_of_patient))
-
 
     # for i in tqdm(range(Number_of_patient)):
     #     Patient_info, data, bis_param = r[i]
