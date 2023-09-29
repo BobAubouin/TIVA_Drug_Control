@@ -174,132 +174,132 @@ def simu(Patient_info: list, style: str, MPC_param: list, MHE_param: list,
 
 # %% Inter patient variability
 
+if __name__ == '__main__':
+    # patient_id for tunning
+    np.random.seed(0)
+    case_list = np.random.randint(0, 500, 16)
 
-# patient_id for tunning
-np.random.seed(0)
-case_list = np.random.randint(0, 500, 16)
+    # Simulation parameter
+    phase = 'induction'
+    ts = 2
 
-# Simulation parameter
-phase = 'induction'
-ts = 2
-
-MPC_param = [30, 30, 10**(1)*np.diag([10, 1])]
-N_mpc = 30
-R_list = [el*np.diag([10, 1]) for el in np.logspace(0, 2, 3)]
-
-
-gamma = 1.e-2
-theta = [gamma, 800, 100, 0.005]*4
-theta[4] = gamma/100
-# theta[12] = 1e-5
-# theta[13] = 300
-# theta[15] = 0.1
-Q = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R = 1e0
-N_mhe = 25
-MHE_param = [R, Q, theta, N_mhe]
+    MPC_param = [30, 30, 10**(1)*np.diag([10, 1])]
+    N_mpc = 30
+    R_list = [el*np.diag([10, 1]) for el in np.logspace(0, 2, 3)]
 
 
-def one_simu(i, MPC_param, MHE_param):
-    """Cost of one simulation, i is the patient index."""
-    # Generate random patient information with uniform distribution
-    np.random.seed(i)
-    age = np.random.randint(low=18, high=70)
-    height = np.random.randint(low=150, high=190)
-    weight = np.random.randint(low=50, high=100)
-    gender = np.random.randint(low=0, high=1)
-
-    Patient_info = [age, height, weight, gender] + [None] * 6
-    IAE, _, _ = simu(Patient_info, phase, MPC_param, MHE_param,
-                     random_PK=True, random_PD=True)
-
-    return IAE
+    gamma = 1.e-2
+    theta = [gamma, 800, 100, 0.005]*4
+    theta[4] = gamma/100
+    # theta[12] = 1e-5
+    # theta[13] = 300
+    # theta[15] = 0.1
+    Q = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
+    R = 1e0
+    N_mhe = 25
+    MHE_param = [R, Q, theta, N_mhe]
 
 
-def cost(R, N_mpc, MHE_param):
-    with mp.Pool(mp.cpu_count()) as p:
-        IAE_list = p.imap(partial(one_simu, MPC_param = [N_mpc, 10**R*np.diag([10, 1])], MHE_param = MHE_param), case_list)
-    
-    return max(IAE_list)
+    def one_simu(i, MPC_param, MHE_param):
+        """Cost of one simulation, i is the patient index."""
+        # Generate random patient information with uniform distribution
+        np.random.seed(i)
+        age = np.random.randint(low=18, high=70)
+        height = np.random.randint(low=150, high=190)
+        weight = np.random.randint(low=50, high=100)
+        gender = np.random.randint(low=0, high=1)
 
-# %% tunning
+        Patient_info = [age, height, weight, gender] + [None] * 6
+        IAE, _, _ = simu(Patient_info, phase, MPC_param, MHE_param,
+                        random_PK=True, random_PD=True)
 
-is_reject = phase == 'maintenance'
-file = Path(f"./scripts/optimal_parameters_MPC{'_reject' if is_reject else ''}.csv")
-if file.exists():
-    param_opti = pd.read_csv(file)
-else:
-    nb_point = 4
-    lb, ub = 1, 3
-    f_cost = partial(cost, N_mpc=N_mpc, MHE_param=MHE_param)
-    IAE_list = list(map(f_cost, np.linspace(lb, ub, nb_point)))
-    R_list = np.linspace(lb, ub, nb_point)
-    id_min = np.argmin(IAE_list)
-    R = R_list[id_min]
-
-    param_opti = pd.DataFrame({'N_mpc': N_mpc, 'R': R}, index=[0])
-
-    plt.plot(R_list, IAE_list)
-    plt.savefig('./Results_Images/tunning_MPC.pdf')
-
-    param_opti.to_csv(file)
-
-# %% plot tunning
-
-# Number_of_patient = 500
-# # Controller parameters
-# R = param_opti['R'][0]
-# N_mpc = param_opti['N_mpc'][0]
-# MPC_param = [N_mpc, 10**R*np.diag([10, 1])]
+        return IAE
 
 
-# df = pd.DataFrame()
-# pd_param = pd.DataFrame()
-# name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
+    def cost(R, N_mpc, MHE_param):
+        with mp.Pool(mp.cpu_count()) as p:
+            IAE_list = p.imap(partial(one_simu, MPC_param = [N_mpc, 10**R*np.diag([10, 1])], MHE_param = MHE_param), case_list)
+        
+        return max(IAE_list)
+
+    # %% tunning
+
+    is_reject = phase == 'maintenance'
+    file = Path(f"./scripts/optimal_parameters_MPC{'_reject' if is_reject else ''}.csv")
+    if file.exists():
+        param_opti = pd.read_csv(file)
+    else:
+        nb_point = 4
+        lb, ub = 1, 3
+        f_cost = partial(cost, N_mpc=N_mpc, MHE_param=MHE_param)
+        IAE_list = list(map(f_cost, np.linspace(lb, ub, nb_point)))
+        R_list = np.linspace(lb, ub, nb_point)
+        id_min = np.argmin(IAE_list)
+        R = R_list[id_min]
+
+        param_opti = pd.DataFrame({'N_mpc': N_mpc, 'R': R}, index=[0])
+
+        plt.plot(R_list, IAE_list)
+        plt.savefig('./Results_Images/tunning_MPC.pdf')
+
+        param_opti.to_csv(file)
+
+    # %% plot tunning
+
+    # Number_of_patient = 500
+    # # Controller parameters
+    # R = param_opti['R'][0]
+    # N_mpc = param_opti['N_mpc'][0]
+    # MPC_param = [N_mpc, 10**R*np.diag([10, 1])]
 
 
-# def one_simu(i):
-#     np.random.seed(i)
-#     # Generate random patient information with uniform distribution
-#     age = np.random.randint(low=18, high=70)
-#     height = np.random.randint(low=150, high=190)
-#     weight = np.random.randint(low=50, high=100)
-#     gender = np.random.randint(low=0, high=2)
-
-#     Patient_info = [age, height, weight, gender] + [None] * 6
-#     _, data, bis_param = simu(Patient_info, phase, MPC_param, MHE_param, random_PD=True, random_PK=True)
-#     return Patient_info, data, bis_param
+    # df = pd.DataFrame()
+    # pd_param = pd.DataFrame()
+    # name = ['BIS', 'MAP', 'CO', 'Up', 'Ur']
 
 
-# with mp.Pool(mp.cpu_count()) as p:
-#     r = list(tqdm(p.imap(one_simu, range(Number_of_patient)), total=Number_of_patient))
+    # def one_simu(i):
+    #     np.random.seed(i)
+    #     # Generate random patient information with uniform distribution
+    #     age = np.random.randint(low=18, high=70)
+    #     height = np.random.randint(low=150, high=190)
+    #     weight = np.random.randint(low=50, high=100)
+    #     gender = np.random.randint(low=0, high=2)
+
+    #     Patient_info = [age, height, weight, gender] + [None] * 6
+    #     _, data, bis_param = simu(Patient_info, phase, MPC_param, MHE_param, random_PD=True, random_PK=True)
+    #     return Patient_info, data, bis_param
 
 
-# for i in tqdm(range(Number_of_patient)):
-#     Patient_info, data, bis_param = r[i]
-#     age = Patient_info[0]
-#     height = Patient_info[1]
-#     weight = Patient_info[2]
-#     gender = Patient_info[3]
+    # with mp.Pool(mp.cpu_count()) as p:
+    #     r = list(tqdm(p.imap(one_simu, range(Number_of_patient)), total=Number_of_patient))
 
-#     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
-#     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
 
-#     dico = {'age': [age],
-#             'height': [height],
-#             'weight': [weight],
-#             'gender': [gender],
-#             'C50p': [bis_param[0]],
-#             'C50r': [bis_param[1]],
-#             'gamma': [bis_param[2]],
-#             'beta': [bis_param[3]],
-#             'Emax': [bis_param[4]],
-#             'E0': [bis_param[5]]}
-#     pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
+    # for i in tqdm(range(Number_of_patient)):
+    #     Patient_info, data, bis_param = r[i]
+    #     age = Patient_info[0]
+    #     height = Patient_info[1]
+    #     weight = Patient_info[2]
+    #     gender = Patient_info[3]
 
-# if phase == 'maintenance':
-#     df.to_csv("./Results_data/result_MPC_maintenance_n=" + str(Number_of_patient) + '.csv')
-# elif phase == 'induction':
-#     df.to_csv("./Results_data/result_MPC_induction_n=" + str(Number_of_patient) + '.csv')
-# else:
-#     df.to_csv("./Results_data/result_MPC_total_n=" + str(Number_of_patient) + '.csv')
+    #     dico = {str(i) + '_' + name[j]: data[j] for j in range(5)}
+    #     df = pd.concat([df, pd.DataFrame(dico)], axis=1)
+
+    #     dico = {'age': [age],
+    #             'height': [height],
+    #             'weight': [weight],
+    #             'gender': [gender],
+    #             'C50p': [bis_param[0]],
+    #             'C50r': [bis_param[1]],
+    #             'gamma': [bis_param[2]],
+    #             'beta': [bis_param[3]],
+    #             'Emax': [bis_param[4]],
+    #             'E0': [bis_param[5]]}
+    #     pd_param = pd.concat([pd_param, pd.DataFrame(dico)], axis=0)
+
+    # if phase == 'maintenance':
+    #     df.to_csv("./Results_data/result_MPC_maintenance_n=" + str(Number_of_patient) + '.csv')
+    # elif phase == 'induction':
+    #     df.to_csv("./Results_data/result_MPC_induction_n=" + str(Number_of_patient) + '.csv')
+    # else:
+    #     df.to_csv("./Results_data/result_MPC_total_n=" + str(Number_of_patient) + '.csv')
