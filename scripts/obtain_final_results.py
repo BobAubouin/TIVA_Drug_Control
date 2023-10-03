@@ -324,25 +324,30 @@ plt.show()
 
 # %% illustrate cost choice
 
-u = np.linspace(0, 1.5, 100)
+time = np.linspace(0, 15*60, 100)
 
-J_quadratic = np.square(u)
-J_quartic = np.square(J_quadratic)
+theta = [1e-3, 800, 100, 0.005]*4
+theta[4] = 1e-5
+theta[12] = 1e-5
+theta[13] = 300
+theta[15] = 0.1
 
-ue = 0.7
-fontsize_plot = 15
-fig, ax = plt.subplots()
-ax.plot(u, J_quadratic, 'b', label="Quadratic cost")
-ax.plot(u, J_quartic, 'r', label="Quartic cost")
-ax.axvline(x=ue, ymin=-1, ymax=0.29, linestyle='--', color="black")
-ax.annotate('$U_e$', xy=(0.7, 1.5), fontsize=fontsize_plot)
-ax.grid(linewidth=0.4)
-ax.legend(fontsize=fontsize_plot)
-ax.set_xlabel('$U$', fontsize=fontsize_plot)
-ax.set_ylabel('$J$', fontsize=fontsize_plot)
 
+Q8 = theta[0] + theta[1]*np.exp(-theta[2]*np.exp(-theta[3]*time))
+Q9 = theta[4] + theta[5]*np.exp(-theta[6]*np.exp(-theta[7]*time))
+Q10 = theta[8] + theta[9]*np.exp(-theta[10]*np.exp(-theta[11]*time))
+Q11 = theta[12] + theta[13]*(1-np.exp(-theta[14]*np.exp(-theta[15]*time)))
+
+plt.plot(time, Q8, label='Q8')
+plt.plot(time, Q9, label='Q9')
+plt.plot(time, Q10, label='Q10')
+plt.plot(time, Q11, label='Q11')
+plt.legend()
+plt.yscale('log')
+plt.grid()
 
 # set aspect ratio to 1
+ax = plt.gca()
 ratio = 0.9
 x_left, x_right = ax.get_xlim()
 y_low, y_high = ax.get_ylim()
