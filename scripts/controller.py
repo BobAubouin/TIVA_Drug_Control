@@ -379,8 +379,6 @@ class NMPC_integrator:
                  bool_u_eq: bool = False):
         """Init NMPC class."""
         Ad, Bd = discretize(A, B, ts)
-        Ad = np.block([[Ad, np.zeros((8, 1))], [np.zeros((1, 8)), np.eye(1)]])
-        Bd = np.block([[Bd], [np.zeros((1, 2))]])
         self.BIS_param = BIS_param
         beta = BIS_param[3]
         E0 = BIS_param[4]
@@ -491,7 +489,7 @@ class NMPC_integrator:
                 'x': cas.vertcat(*w), 'g': cas.vertcat(*(gu+gbis))}  #
         self.solver = cas.nlpsol('solver', 'ipopt', prob, opts)
 
-    def one_step(self, x: list, Bis_target: float, bis_param: list = None, R: list = None) -> tuple[float, float]:
+    def one_step(self, x: list, Bis_target: float, R: list = None) -> tuple[float, float]:
         """
         Compute the next optimal control input given the current state of the system and the BIS target.
 
@@ -512,6 +510,10 @@ class NMPC_integrator:
             Remifentanil rates for the next sample time.
 
         """
+
+        bis_param = x[9:12]
+        x = x[:9]
+
         # the init point of the optimization proble is the previous optimal solution
         w0 = []
         for k in range(self.Nu):
@@ -537,7 +539,7 @@ class NMPC_integrator:
         self.ueq = ueq
         sol = self.solver(x0=w0,
                           p=list(x) + [self.internal_target] + list(self.U_prec[0:2]) +
-                          bis_param + list(np.diag(self.R)) + list(ueq),
+                          list(bis_param) + list(np.diag(self.R)) + list(ueq),
                           lbx=self.lbw,
                           ubx=self.ubw,
                           lbg=self.lbg_u + self.lbg_bis,

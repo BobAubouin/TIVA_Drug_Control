@@ -15,21 +15,21 @@ from python_anesthesia_simulator import metrics
 
 
 Number_of_patient = 500
-phase = 'induction'
+phase = 'total'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
 title = 'NMPC'
 title = 'multi_NMPC'
 title = 'MHE_NMPC'
-# title = 'MPC_lin'
-title = 'PID'
+title = 'MPC'
+# title = 'PID'
 # title = 'NMPC_int_induction'
 # title = 'multi_MMPC_int'
 if title == 'PID':
     ts = 1
 else:
     ts = 2
-Data = pd.read_csv("./Results_data/result_" + title + "_n=" + str(Number_of_patient) + '.csv')
+Data = pd.read_csv("./Results_data/result_" + title + "_" + phase + "_n=" + str(Number_of_patient) + '.csv')
 
 
 if phase == 'induction':
@@ -45,6 +45,28 @@ elif phase == 'maintenance':
     BIS_NADIRp_list = []
     BIS_NADIRn_list = []
 
+BIS_data = Data[[f"{i}_BIS" for i in range(Number_of_patient)]].to_numpy()
+Time = np.arange(0, len(Data)) * ts / 60
+plt.subplot(2, 1, 1)
+plt.title(title + ' ' + phase)
+plt.plot(Time, BIS_data, linewidth=0.2, color='b')
+plt.plot(Time, np.nanmean(BIS_data, axis=1), linewidth=1, color='r')
+plt.ylabel('BIS')
+plt.grid()
+Up_data = Data[[f"{i}_Up" for i in range(Number_of_patient)]].to_numpy()
+Ur_data = Data[[f"{i}_Ur" for i in range(Number_of_patient)]].to_numpy()
+
+plt.subplot(2, 1, 2)
+plt.plot(Time, Up_data, linewidth=0.5, color='b', alpha=0.1)
+plt.plot(Time, Ur_data, linewidth=0.5, color='r', alpha=0.1)
+plt.plot(Time, np.nanmean(Up_data, axis=1), linewidth=1, color='b')
+plt.plot(Time, np.nanmean(Ur_data, axis=1), linewidth=1, color='r')
+plt.ylabel('Inputs')
+plt.grid()
+plt.xlabel('Time (min)')
+plt.savefig('./Results_Images/BIS_' + title + '_n=' + str(Number_of_patient) + '.pdf')
+plt.show()
+
 
 for i in range(Number_of_patient):  # Number_of_patient
     # for i in range(108, 109):
@@ -52,7 +74,6 @@ for i in range(Number_of_patient):  # Number_of_patient
 
     BIS = Data[str(i) + '_BIS']
     Time = np.arange(0, len(BIS)) * ts / 60
-    plt.plot(Time, BIS, linewidth=0.5)
 
     if phase == 'induction':
         TT, BIS_NADIR, ST10, ST20, US = metrics.compute_control_metrics(
@@ -70,11 +91,6 @@ for i in range(Number_of_patient):  # Number_of_patient
         BIS_NADIRp_list.append(BIS_NADIRp)
         BIS_NADIRn_list.append(BIS_NADIRn)
 
-plt.xlabel('Time (min)')
-plt.ylabel('BIS')
-plt.grid()
-plt.savefig('./Results_Images/BIS_' + title + '_n=' + str(Number_of_patient) + '.pdf')
-plt.show()
 
 result_table = pd.DataFrame()
 result_table.insert(len(result_table.columns), "", ['mean', 'std', 'min', 'max'])

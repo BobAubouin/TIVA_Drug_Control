@@ -9,7 +9,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib
 import matplotlib.colors as mcolors
-import tikzplotlib
+
 
 # plot config
 matplotlib.rcParams['pdf.fonttype'] = 42
@@ -326,11 +326,12 @@ plt.show()
 
 time = np.linspace(0, 15*60, 100)
 
-theta = [1e-3, 800, 100, 0.005]*4
-theta[4] = 1e-5
-theta[12] = 1e-5
+gamma = 1.e-2
+theta = [gamma, 800, 100, 0.005]*4
+theta[4] = gamma/100
+theta[12] = gamma/100
 theta[13] = 300
-theta[15] = 0.1
+theta[15] = 0.05
 
 
 Q8 = theta[0] + theta[1]*np.exp(-theta[2]*np.exp(-theta[3]*time))
@@ -345,16 +346,13 @@ plt.plot(time, Q11, label='Q11')
 plt.legend()
 plt.yscale('log')
 plt.grid()
-
 # set aspect ratio to 1
 ax = plt.gca()
 ratio = 0.9
-x_left, x_right = ax.get_xlim()
-y_low, y_high = ax.get_ylim()
-ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
-
-
-plt.draw()
+# x_left, x_right = ax.get_xlim()
+# y_low, y_high = ax.get_ylim()
+# ax.set_aspect(abs((x_right-x_left)/(y_low-y_high))*ratio)
+plt.plot()
 
 # save it
 savepath = image_folder_path + "cost.pdf"

@@ -37,6 +37,72 @@ def discretize(A: list, B: list, ts: float) -> tuple[list, list]:
     return Ad, Bd
 
 
+def derivated_of_f(x: list, bis_param: list) -> list:
+    """Compute the derivated of the non-linear function BIS.
+
+    Parameters
+    ----------
+    x : list
+        State vector [xep, xer].
+    bis_param : list
+        Parameters of the non-linear function BIS_param = [C50p, C50r, gamma, beta, E0, Emax].
+
+    Returns
+    -------
+    list
+        Derivated of the non-linear function BIS.
+
+    """
+    # if len(x) == 8:
+    C50p = bis_param[0]
+    C50r = bis_param[1]
+    gamma = bis_param[2]
+
+    # elif len(x) == 11:
+    #     C50p = x[8]
+    #     C50r = x[9]
+    #     gamma = x[10]
+    #     df = np.zeros((1, 11))
+
+    beta = bis_param[3]
+    Emax = bis_param[5]
+
+    up = x[3] / C50p
+    ur = x[7] / C50r
+    Phi = up/(up + ur + 1e-6)
+    U50 = 1 - beta * (Phi - Phi**2)
+    I = (up + ur)/U50
+    dup_dxp = 1/C50p
+    dur_dxr = 1/C50r
+    dPhi_dxep = dup_dxp * ur/(up + ur + 1e-6)**2
+    dPhi_dxer = -dur_dxr * up/((up + ur + 1e-6)**2)
+    dU50_dxep = beta*(1 - 2*Phi)*dPhi_dxep
+    dU50_dxer = beta*(1 - 2*Phi)*dPhi_dxer
+    dI_dxep = (dup_dxp*U50 - dU50_dxep*(up+ur))/U50**2
+    dI_dxer = (dur_dxr*U50 - dU50_dxer*(up+ur))/U50**2
+
+    dBIS_dxep = -Emax*gamma*I**(gamma-1)*dI_dxep/(1+I**gamma)**2
+    dBIS_dxer = -Emax*gamma*I**(gamma-1)*dI_dxer/(1+I**gamma)**2
+    df = cas.hcat([0, 0, 0, dBIS_dxep, 0, 0, 0, dBIS_dxer, 1])
+
+    # if len(x) == 11:
+    #     dup_dc50p = -x[3]/C50p**2
+    #     dur_dc50r = -x[7]/C50r**2
+    #     dPhi_dc50p = (dup_dc50p*ur)/(up + ur + 1e-6)**2
+    #     dPhi_dc50r = -(dur_dc50r*up)/(up + ur + 1e-6)**2
+    #     dU50_dc50p = beta*(1 - 2*Phi)*dPhi_dc50p
+    #     dU50_dc50r = beta*(1 - 2*Phi)*dPhi_dc50r
+    #     dI_dc50p = (dup_dc50p*U50 - (up + ur)*dU50_dc50p)/U50**2
+    #     dI_dc50r = (dur_dc50r*U50 - (up + ur)*dU50_dc50r)/U50**2
+    #     dBIS_dc50p = -Emax*gamma*I**(gamma-1)*dI_dc50p/(1+I**gamma)**2
+    #     dBIS_dc50r = -Emax*gamma*I**(gamma-1)*dI_dc50r/(1+I**gamma)**2
+    #     dBIS_gamma = -Emax*I**gamma*np.log(I)/(1+I**gamma)**2
+    #     df[0, 8] = dBIS_dc50p
+    #     df[0, 9] = dBIS_dc50r
+    #     df[0, 10] = dBIS_gamma
+    return df
+
+
 def BIS(xep: float, xer: float, Bis_param: list) -> float:
     """
     Compute the non-linear output function.
@@ -62,8 +128,8 @@ def BIS(xep: float, xer: float, Bis_param: list) -> float:
     beta = Bis_param[3]
     E0 = Bis_param[4]
     Emax = Bis_param[5]
-    up = max(0, xep / C50p)
-    ur = max(0, xer / C50r)
+    up = xep / C50p
+    ur = xer / C50r
     Phi = up/(up + ur + 1e-6)
     U_50 = 1 - beta * (Phi - Phi**2)
     i = (up + ur)/U_50
@@ -71,11 +137,11 @@ def BIS(xep: float, xer: float, Bis_param: list) -> float:
     return BIS
 
 
-class EKF:
+class EKF_integrator_new:
     """Implementation of the Extended Kalman Filter for the Coadministration of drugs in Anesthesia."""
 
-    def __init__(self, A: list, B: list, BIS_param: list, ts: float, x0: list = np.zeros((8, 1)),
-                 Q: list = np.eye(8), R: list = np.array([1]), P0: list = np.eye(8)):
+    def __init__(self, A: list, B: list, BIS_param: list, ts: float, x0: list = np.ones((9, 1))*1.e-3,
+                 Q: list = np.eye(9), R: list = np.array([1]), P0: list = np.eye(9)):
         """
         Init the EKF class.
 
@@ -118,197 +184,7 @@ class EKF:
         self.P = P0
 
         # declare CASADI variables
-        x = cas.MX.sym('x', 8)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
-        y = cas.MX.sym('y')  # BIS [%]
-        prop = cas.MX.sym('prop')   # Propofol infusion rate [mg/ml/min]
-        rem = cas.MX.sym('rem')   # Remifentanil infusion rate [mg/ml/min]
-        u = cas.vertcat(prop, rem)
-        P = cas.MX.sym('P', 8, 8)   # P matrix
-        Pup = cas.MX.sym('P', 8, 8)   # P matrix
-
-        # declare CASADI functions
-        xpred = cas.MX(self.Ad) @ x + cas.MX(self.Bd) @ u
-        Ppred = cas.MX(self.Ad) @ P @ cas.MX(self.Ad.T) + cas.MX(self.Q)
-        self.Pred = cas.Function('Pred', [x, u, P], [xpred, Ppred], [
-                                 'x', 'u', 'P'], ['xpred', 'Ppred'])
-
-        up = x[3] / C50p
-        ur = x[7] / C50r
-        Phi = up/(up + ur + 1e-6)
-        U_50 = 1 - beta * (Phi - Phi**2)
-        i = (up + ur)/U_50
-
-        h_fun = E0 - Emax * i ** gamma / (1 + i ** gamma)
-        self.output = cas.Function('output', [x], [h_fun], ['x'], ['bis'])
-
-        H = cas.gradient(h_fun, x).T
-
-        S = H @ P @ H.T + cas.MX(self.R)
-        K = P @ H.T @ cas.inv(S)
-
-        error = y - h_fun
-        xup = x + K @ error
-        Pup = (cas.MX(np.identity(8)) - K@H)@P
-        # S = H @ P0 @ H.T + cas.MX(self.R)
-        self.Update = cas.Function('Update', [x, y, P], [xup, Pup, error, S], [
-                                   'x', 'y', 'P'], ['xup', 'Pup', 'error', 'S'])
-
-        # init state and output
-        self.x = x0
-        self.Biso = [BIS(self.x[3], self.x[7], BIS_param)]
-        self.error = 0
-
-    def estimate(self, u: list, bis: float) -> tuple[list, float]:
-        """
-        Estimate the state given past input and current measurement.
-
-        Parameters
-        ----------
-        u : list
-            Last control inputs.
-        bis : float
-            Last BIS measurement.
-
-        Returns
-        -------
-        x: list
-            State estimation.
-        BIS: float
-            Filtered BIS.
-
-        """
-        self.Predk = self.Pred(x=self.x, u=u, P=self.P)
-        self.xpr = self.Predk['xpred'].full().flatten()
-        self.Ppr = self.Predk['Ppred'].full()
-
-        self.Updatek = self.Update(x=self.xpr, y=bis, P=self.Ppr)
-        self.x = self.Updatek['xup'].full().flatten()
-        self.P = self.Updatek['Pup']
-        self.error = float(self.Updatek['error'])
-        self.bis_pred = bis - self.error
-        self.S = self.Updatek['S']
-
-        # self.x[3] = max(1e-3, self.x[3])
-        # self.x[7] = max(1e-3, self.x[7])
-        self.x = np.clip(self.x, a_min=1e-3, a_max=None)
-        self.Bis = BIS(self.x[3], self.x[7], self.BIS_param)
-
-        return self.x, self.Bis
-
-    def predict_from_state(self, x: list, up: list, ur: list) -> list:
-        """
-        Return the BIS prediction using the given initial state and the control input.
-
-        Parameters
-        ----------
-        x : list
-            Initial state vector of the interval.
-        up : list
-            Propofol rates over the interval.
-        ur : list
-            Remifentanil rates over the interval.
-
-        Returns
-        -------
-        BIS_list: list
-            BIS value predicted by the model over the interval.
-
-        """
-        bis = self.output(x=x)
-        BIS_list = [float(bis['bis'])]
-        x = np.expand_dims(x, axis=1)
-        for i in range(len(up)):
-            u = np.array([[up[i]], [ur[i]]])
-            x = self.Ad @ x + self.Bd @ u
-            bis = self.output(x=x)
-            BIS_list.append(float(bis['bis']))
-
-        return np.array(BIS_list)
-
-    def find_from_state(self, x: list, up: list, ur: list) -> list:
-        """
-        Return the BIS prediction using the given initial state and the control input.
-
-        Parameters
-        ----------
-        x : list
-            Initial state vector of the interval.
-        up : list
-            Propofol rates over the interval.
-        ur : list
-            Remifentanil rates over the interval.
-
-        Returns
-        -------
-        BIS_list: list
-            BIS value predicted by the model over the interval.
-
-        """
-        invA = np.linalg.inv(self.Ad)
-        bis = self.output(x=x)
-        BIS_list = [float(bis['bis'])]
-        x = np.expand_dims(x, axis=1)
-        for i in range(len(up)):
-            u = np.array([[up[len(up)-i-1]], [ur[len(up)-i-1]]])
-            x = invA @ (x - self.Bd @ u)
-            bis = self.output(x=x)
-            BIS_list = [float(bis['bis'])] + BIS_list
-
-        return np.array(BIS_list)
-
-
-class EKF_integrator:
-    """Implementation of the Extended Kalman Filter for the Coadministration of drugs in Anesthesia.
-
-    Same than EKF but with the estimation of a constant distrubance term."""
-
-    def __init__(self, A: list, B: list, BIS_param: list, ts: float, x0: list = np.zeros((9, 1)),
-                 Q: list = np.eye(9), R: list = np.array([1]), P0: list = np.eye(9)):
-        """
-        Init the EKF class.
-
-        Parameters
-        ----------
-        A : list
-            Dynamic matric of the continuous system dx/dt = Ax + Bu.
-        B : list
-            Input matric of the continuous system dx/dt = Ax + Bu.
-        BIS_param : list
-            Contains parameters of the non-linear function output BIS_param = [C50p, C50r, gamma, beta, E0, Emax]
-        ts : float, optional
-            Sampling time of the system. The default is 1.
-        x0 : list, optional
-            Initial state of the system. The default is np.zeros((9, 1)).
-        Q : list, optional
-            Covariance matrix of the process uncertainties. The default is np.eye(9).
-        R : list, optional
-            Covariance matrix of the measurement noises. The default is np.array([1]).
-        P0 : list, optional
-            Initial covariance matrix of the state estimation. The default is np.eye(9).
-        Returns
-        -------
-        None.
-
-        """
-        self.Ad, self.Bd = discretize(A, B, ts)
-        self.Ad = np.block([[self.Ad, np.zeros((8, 1))], [np.zeros((1, 8)), np.eye(1)]])
-        self.Bd = np.block([[self.Bd], [np.zeros((1, 2))]])
-        self.sys = ctrl.ss(self.Ad, self.Bd, np.eye(9), np.zeros((9, 2)), ts)
-        self.ts = ts
-        self.BIS_param = BIS_param
-        C50p = BIS_param[0]
-        C50r = BIS_param[1]
-        gamma = BIS_param[2]
-        beta = BIS_param[3]
-        E0 = BIS_param[4]
-        Emax = BIS_param[5]
-
-        self.R = R
-        self.Q = Q
-        self.P = P0
-
-        # declare CASADI variables
-        x = cas.MX.sym('x', 9)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml] d [%]
+        x = cas.MX.sym('x', 9)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
         y = cas.MX.sym('y')  # BIS [%]
         prop = cas.MX.sym('prop')   # Propofol infusion rate [mg/ml/min]
         rem = cas.MX.sym('rem')   # Remifentanil infusion rate [mg/ml/min]
@@ -331,7 +207,8 @@ class EKF_integrator:
         h_fun = E0 - Emax * i ** gamma / (1 + i ** gamma) + x[8]
         self.output = cas.Function('output', [x], [h_fun], ['x'], ['bis'])
 
-        H = cas.gradient(h_fun, x).T
+        H = derivated_of_f(x, self.BIS_param)
+        # cas.gradient(h_fun, x).T
 
         S = H @ P @ H.T + cas.MX(self.R)
         K = P @ H.T @ cas.inv(S)
@@ -340,8 +217,8 @@ class EKF_integrator:
         xup = x + K @ error
         Pup = (cas.MX(np.identity(9)) - K@H)@P
         # S = H @ P0 @ H.T + cas.MX(self.R)
-        self.Update = cas.Function('Update', [x, y, P], [xup, Pup, error, S], [
-                                   'x', 'y', 'P'], ['xup', 'Pup', 'error', 'S'])
+        self.Update = cas.Function('Update', [x, y, P], [xup, Pup, error, S, K], [
+                                   'x', 'y', 'P'], ['xup', 'Pup', 'error', 'S', 'K'])
 
         # init state and output
         self.x = x0
@@ -373,77 +250,113 @@ class EKF_integrator:
 
         self.Updatek = self.Update(x=self.xpr, y=bis, P=self.Ppr)
         self.x = self.Updatek['xup'].full().flatten()
-        self.P = self.Updatek['Pup']
+        self.P = self.Updatek['Pup'].full()
+        self.K = self.Updatek['K'].full()
         self.error = float(self.Updatek['error'])
         self.bis_pred = bis - self.error
         self.S = self.Updatek['S']
 
         # self.x[3] = max(1e-3, self.x[3])
         # self.x[7] = max(1e-3, self.x[7])
-        self.x[:8] = np.clip(self.x[:8], a_min=1e-3, a_max=None)
-        self.Bis = BIS(self.x[3], self.x[7], self.BIS_param) + self.x[8]
+        self.x = np.clip(self.x, a_min=1e-3, a_max=None)
+        self.bis = BIS(self.x[3], self.x[7], self.BIS_param) + self.x[8]
 
-        return self.x, self.Bis
+        return self.x, self.bis
 
-    def predict_from_state(self, x: list, up: list, ur: list) -> list:
+
+class MEKF:
+    """Multi Extended Kalman Filter for estimation of the PD parameters in TIVA anesthesia.
+
+    Parameters
+    ----------
+    A : list
+        Dynamic matrix of the continuous system dx/dt = Ax + Bu.
+    B : list
+        Input matrix of the continuous system dx/dt = Ax + Bu.
+    grid_vector : list
+        Contains a drif of parameters of the non-linear function output BIS_param = [C50p, C50r, gamma, beta, E0, Emax].
+    ts : float, optional
+        Sampling time of the system. The default is 1.
+    x0 : list, optional
+        Initial state of the system. The default is np.zeros((8, 1)).
+    Q : list, optional
+        Covariance matrix of the process uncertainties. The default is np.eye(8).
+    R : list, optional
+        Covariance matrix of the measurement noises. The default is np.array([1]).
+    P0 : list, optional
+        Initial covariance matrix of the state estimation. The default is np.eye(8).
+    eta0 : list, optional
+        Initial state of the parameter estimation. The default is np.ones((6, 1)).
+    design_param : list, optional
+        Design parameters of the system [lambda_1, lambda_2, nu, epsilon]. The default is [1, 1, 0.1, 0.9].
+    """
+
+    def __init__(self, A: list, B: list, grid_vector: list, ts: float = 1,
+                 x0: list = np.ones((9, 1))*1.e-3, Q: list = np.eye(9),
+                 R: list = np.array([1]), P0: list = np.eye(9),
+                 eta0: list = None, design_param: list = [1, 1, 0.1]) -> None:
+        """Init the MEKF class."""
+        self.ts = ts
+
+        # define the set of EKF
+        self.EKF_list = []
+        for BIS_param in grid_vector:
+            self.EKF_list.append(EKF_integrator_new(A, B, BIS_param, ts, x0, Q, R, P0))
+
+        # Init the criterion
+        self.grid_vector = grid_vector
+        if eta0 is None:
+            self.eta = np.ones((len(self.EKF_list), 1))
+        self.eta = eta0
+        self.best_index = np.argmin(eta0)
+
+        # define the design parameters
+        self.lambda_1 = design_param[0]
+        self.lambda_2 = design_param[1]
+        self.nu = design_param[2]
+        self.epsilon = design_param[3]
+
+    def one_step(self, u: list, measurement: float) -> tuple[list, float]:
         """
-        Return the BIS prediction using the given initial state and the control input.
+        Estimate the state given past input and current measurement.
 
         Parameters
         ----------
-        x : list
-            Initial state vector of the interval.
-        up : list
-            Propofol rates over the interval.
-        ur : list
-            Remifentanil rates over the interval.
+        u : list
+            Last control inputs.
+        measurement : float
+            Last BIS measurement.
 
         Returns
         -------
-        BIS_list: list
-            BIS value predicted by the model over the interval.
-
+        x: list
+            State estimation.
+        BIS: float
+            Filtered BIS.
+        best_index: int
+            Index of the best EKF.
         """
-        U = np.concatenate(([up], [ur]), axis=0)
-        # x = np.expand_dims(x, axis=1)
-        _, yout = ctrl.forced_response(self.sys, U=U, X0=x, return_x=False)
-        bis = self.output(x=x)
-        BIS_list = [float(bis['bis'])]
-        for i in range(len(yout[0])):
-            bis = self.output(x=yout[:, i])
-            BIS_list.append(float(bis['bis']))
-        return np.array(BIS_list)
+        # estimate the state for each EKF
+        for i, ekf in enumerate(self.EKF_list):
+            ekf.estimate(u, measurement)
+            error = measurement - ekf.bis
+            K_i = np.array(ekf.K)
+            self.eta[i] += self.ts*(-self.nu*self.eta[i] + self.lambda_1 * error **
+                                    2 + self.lambda_2 * (K_i.T @ K_i) * error**2)
 
-    def find_from_state(self, x: list, up: list, ur: list) -> list:
-        """
-        Return the BIS prediction using the given initial state and the control input.
+        # compute the criterion
+        possible_best_index = np.argmin(self.eta)
+        if self.eta[possible_best_index] < self.epsilon * self.eta[self.best_index]:
+            self.best_index = possible_best_index
+            # init the criterion again
+            # self.eta = np.ones(len(self.EKF_list))
+            # for ekf in self.EKF_list:
+            #     ekf.x = self.EKF_list[self.best_index].x
 
-        Parameters
-        ----------
-        x : list
-            Initial state vector of the interval.
-        up : list
-            Propofol rates over the interval.
-        ur : list
-            Remifentanil rates over the interval.
+        X = self.EKF_list[self.best_index].x
+        X = np.concatenate((X, self.grid_vector[self.best_index][:3]), axis=0)
 
-        Returns
-        -------
-        BIS_list: list
-            BIS value predicted by the model over the interval.
-
-        """
-        invA = np.linalg.inv(self.Ad)
-        bis = self.output(x=x)
-        BIS_list = [float(bis['bis'])]
-        x = np.expand_dims(x, axis=1)
-        for i in range(len(up)):
-            u = np.array([[up[len(up)-i-1]], [ur[len(up)-i-1]]])
-            x = invA @ (x - self.Bd @ u)
-            bis = self.output(x=x)
-            BIS_list = [float(bis['bis'])] + BIS_list
-
-        return np.array(BIS_list)
+        return X, self.EKF_list[self.best_index].bis
 
 
 class MHE:
@@ -776,7 +689,7 @@ class MHE_integrator:
         self.x_pred = self.x.reshape(self.nb_states*N_MHE, order='F')
         self.time = 0
 
-    def one_step(self, Bis, u) -> np.array:
+    def one_step(self, u, Bis) -> np.array:
         """solve the MHE problem for one step.
 
         Parameters
