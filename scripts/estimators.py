@@ -789,4 +789,5 @@ class MHE_integrator:
             plt.show()
         self.x_pred = np.array(res['x']).reshape(self.nb_states*self.N_mhe)
         bis = float(self.output(x=self.x[:, [-1]])['bis'])
-        return self.x[:, [-1]], bis
+        x_return = np.concatenate([self.x[:8, -1], self.x[[11], -1], self.x[8:11, -1]])
+        return x_return, bis

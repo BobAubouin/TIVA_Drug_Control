@@ -7,11 +7,11 @@ import optuna
 import time
 
 phase = 'induction'
-control_type = 'MEKF-NMPC'
+control_type = 'MHE-NMPC'
 Patient_number = 50
 
 study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
-Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 1])
+Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 10])
 R_est = study_petri.best_params['R']
 P0_est = 1e-3 * np.eye(9)
 lambda_1 = 1
@@ -106,11 +106,23 @@ for i, c50p in enumerate(c50p_list[1:-1]):
 MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
 
 
-param = MEKF_param + [45, 45, 10**(0.5) * np.diag([10, 1])]
+param = MEKF_param + [21, 21, 19 * np.diag([16, 1])]
+
+
+study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
+gamma = 5.477  # study_mhe.best_params['eta']
+theta = [gamma, 0, 0, 0]*4
+theta[4] = gamma/100
+theta[12] = gamma*100
+Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
+R_mhe = 0.5652  # study_mhe.best_params['R']
+N_mhe = 30  # study_mhe.best_params['N_mhe']
+param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [21, 21, 19 * np.diag([10, 1])]
+
 
 start = time.perf_counter()
 df = perform_simulation([30, 170, 70, 0], phase, control_type=control_type,
-                        control_param=param, random_bool=[True, True])
+                        control_param=param_mhe, random_bool=[True, True])
 end = time.perf_counter()
 
 print(f" Time to perform {phase} phase : {end-start} s")
