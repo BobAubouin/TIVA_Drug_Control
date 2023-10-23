@@ -82,8 +82,10 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
     u_propo, u_remi = 0, 0
     if phase == 'induction':
         N_simu = 10*60//ts
+        bool_noise = False
     else:
         N_simu = 20*60//ts
+        bool_noise = True
 
     for i in range(N_simu):
         if phase == 'induction':
@@ -91,7 +93,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         else:
             disturbance = pas.compute_disturbances(i*ts, 'step', start_step=10*60, end_step=15*60)
 
-        bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=False, dist=disturbance)
+        bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=bool_noise, dist=disturbance)
 
         if i == N_simu - 1:
             break
