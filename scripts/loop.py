@@ -61,6 +61,9 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         A = np.block([[Ap, np.zeros((4, 5))], [np.zeros((4, 4)), Ar, np.zeros((4, 1))], [np.zeros((1, 9))]])
         B = np.block([[Bp, np.zeros((4, 1))], [np.zeros((4, 1)), Br], [0, 0]])
 
+        A_mhe = np.block([[Ap, np.zeros((4, 4))], [np.zeros((4, 4)), Ar]])
+        B_mhe = np.block([[Bp, np.zeros((4, 1))], [np.zeros((4, 1)), Br]])
+
         if control_type == 'EKF-NMPC':
             estimator = EKF_integrator_new(A, B, BIS_param_nominal, ts,
                                            Q=control_param[0], R=control_param[1], P0=control_param[2])
@@ -73,7 +76,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
                                          R=control_param[8], umax=[up_max, ur_max], umin=[0, 0])
         elif control_type == 'MHE-NMPC':
             estimator = MHE_integrator(
-                A, B, BIS_param_nominal, ts, Q=control_param[0], R=control_param[1], N_MHE=control_param[2], theta=control_param[3])
+                A_mhe, B_mhe, BIS_param_nominal, ts, Q=control_param[0], R=control_param[1], N_MHE=control_param[2], theta=control_param[3])
             controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[4], Nu=control_param[5],
                                          R=control_param[6], umax=[up_max, ur_max], umin=[0, 0])
 
