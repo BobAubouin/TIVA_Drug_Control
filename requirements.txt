@@ -1,4 +1,4 @@
-git+https://github.com/BobAubouin/Python_Anesthesia_Simulator.git@v1.0.0
+git+https://github.com/BobAubouin/Python_Anesthesia_Simulator.git
 casadi
 pandas
 bokeh==2.4.3
