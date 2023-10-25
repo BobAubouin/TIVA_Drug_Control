@@ -9,9 +9,9 @@ import pandas as pd
 
 folder_path = './Results_data/'
 
-Table_PID = pd.read_csv(folder_path + 'result_table_PID_n=500')
-Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_n=500')
-Table_MMPC = pd.read_csv(folder_path + 'result_table_multi_NMPC_n=500')
+Table_PID = pd.read_csv(folder_path + 'result_table_PID_induction_500.csv')
+Table_NMPC = pd.read_csv(folder_path + 'result_table_MHE_NMPC_induction_500.csv')
+Table_MMPC = pd.read_csv(folder_path + 'result_table_MEKF_NMPC_induction_500.csv')
 
 
 final_table = pd.DataFrame(columns=['Controller', 'TT_mean', 'TT_max', 'BIS_NADIR_mean', 'BIS_NADIR_min',

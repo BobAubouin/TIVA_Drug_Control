@@ -51,7 +51,8 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
                          N=5, Ts=ts, umax=max(up_max, ur_max / control_param[3]), umin=0)
     else:
         # get Nominal model from the patient info
-        Patient_nominal_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=False, random_PD=False, model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld')
+        Patient_nominal_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=False,
+                                           random_PD=False, model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld')
         Ap = Patient_nominal_simu.propo_pk.continuous_sys.A[:4, :4]
         Bp = Patient_nominal_simu.propo_pk.continuous_sys.B[:4]
         Ar = Patient_nominal_simu.remi_pk.continuous_sys.A[:4, :4]
@@ -68,8 +69,8 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         if control_type == 'EKF-NMPC':
             estimator = EKF_integrator_new(A, B, BIS_param_nominal, ts,
                                            Q=control_param[0], R=control_param[1], P0=control_param[2])
-            controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[3], Nu=control_param[3],
-                                         R=control_param[4], umax=[up_max, ur_max], umin=[0, 0])
+            controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[3], Nu=control_param[4],
+                                         R=control_param[5], umax=[up_max, ur_max], umin=[0, 0])
         elif control_type == 'MEKF-NMPC':
             estimator = MEKF(A, B, ts=ts, Q=control_param[0], R=control_param[1], P0=control_param[2],
                              grid_vector=control_param[3], eta0=control_param[4], design_param=control_param[5])
@@ -110,7 +111,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         else:
             x_estimated, _ = estimator.one_step([u_propo, u_remi], bis[0])
             if control_type == 'EKF-NMPC':
-                x_estimated = np.concatenate(x_estimated, BIS_param_nominal[:3])
+                x_estimated = np.concatenate((x_estimated, BIS_param_nominal[:3]))
             u_propo, u_remi = controller.one_step(x_estimated, bis_target)
         end = perf_counter()
         line = pd.DataFrame([[i*ts, bis[0], u_propo, u_remi, end-start]],

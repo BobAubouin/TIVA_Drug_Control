@@ -31,10 +31,10 @@ folder_path = './Results_data/'
 image_folder_path = './Results_Images/'
 
 try:
-    Table_PID = pd.read_csv(folder_path + 'result_table_PID_' + phase + '_n=500')
-    Table_NMPC = pd.read_csv(folder_path + 'result_table_NMPC_' + phase + '_n=500')
-    Table_MMPC = pd.read_csv(folder_path + 'result_table_multi_' + phase + '_NMPC_n=500')
-    Table_MHEMPC = pd.read_csv(folder_path + 'result_table_MHE_' + phase + '_NMPC_n=500')
+    Table_PID = pd.read_csv(folder_path + 'result_table_PID_induction_500.csv')
+    Table_NMPC = pd.read_csv(folder_path + 'result_table_EKF_NMPC_induction_500.csv')
+    Table_MMPC = pd.read_csv(folder_path + 'result_table_MEKF_NMPC_induction_500.csv')
+    Table_MHEMPC = pd.read_csv(folder_path + 'result_table_MHE_NMPC_induction_500.csv')
 
     final_table = pd.DataFrame(columns=['Controller', 'TT_mean', 'TT_max', 'BIS_NADIR_mean', 'BIS_NADIR_min',
                                         'ST10_mean', 'ST10_max', 'ST20_mean', 'ST20_max', 'US_mean', 'US_max'])
@@ -67,27 +67,27 @@ except FileNotFoundError:
 
 
 # get data
-Number_of_patient = 8
-phase = 'total'
+Number_of_patient = 500
+phase = 'induction'
 
 bool_PID = False
 bool_NMPC = False
 bool_MMPC = False
 bool_MHEMPC = False
 try:
-    Data_PID = pd.read_csv(folder_path + "result_PID_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    Data_PID = pd.read_csv(f"{folder_path}PID_{phase}_{Number_of_patient}.csv")
     bool_PID = True
 except FileNotFoundError:
     print("No data available for PID")
 
 try:
-    Data_NMPC = pd.read_csv(folder_path + "result_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    Data_NMPC = pd.read_csv(f"{folder_path}MHE_NMPC_{phase}_{Number_of_patient}.csv")
     bool_NMPC = True
 except FileNotFoundError:
     print("No data available for NMPC")
 
 try:
-    Data_MMPC = pd.read_csv(folder_path + "result_multi_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    Data_MMPC = pd.read_csv(f"{folder_path}MEKF_NMPC_{phase}_{Number_of_patient}.csv")
     bool_MMPC = True
 except FileNotFoundError:
     print("No data available for MMPC")
@@ -136,17 +136,17 @@ if bool_NMPC:
     Time_MPC = np.arange(0, len(BIS_NMPC)) * ts_MPC / 60
 
 if bool_PID:
-    Up_PID = Data_PID[str(Patient_id_min_PID)+'_Up']
-    Ur_PID = Data_PID[str(Patient_id_min_PID)+'_Ur']
+    Up_PID = Data_PID[str(Patient_id_min_PID)+'_u_propo']
+    Ur_PID = Data_PID[str(Patient_id_min_PID)+'_u_remi']
 if bool_NMPC:
-    Up_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Up']
-    Ur_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_Ur']
+    Up_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_u_propo']
+    Ur_NMPC = Data_NMPC[str(Patient_id_min_NMPC)+'_u_remi']
 if bool_MMPC:
-    Up_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Up']
-    Ur_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_Ur']
+    Up_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_u_propo']
+    Ur_MMPC = Data_MMPC[str(Patient_id_min_MMPC)+'_u_remi']
 if bool_MHEMPC:
-    Up_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_Up']
-    Ur_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_Ur']
+    Up_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_u_propo']
+    Ur_MHEMPC = Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_u_remi']
 
 
 # %% Create BIS figure

@@ -5,10 +5,9 @@ import numpy as np
 import python_anesthesia_simulator as pas
 import optuna
 import time
+import multiprocessing as mp
+from functools import partial
 
-phase = 'induction'
-control_type = 'MHE-NMPC'
-Patient_number = 50
 
 study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
 Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 10])
@@ -106,7 +105,7 @@ for i, c50p in enumerate(c50p_list[1:-1]):
 MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
 
 
-param = MEKF_param + [21, 21, 19 * np.diag([16, 1])]
+param = MEKF_param + [30, 30, 19 * np.diag([16, 1])]
 
 
 study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
@@ -116,14 +115,49 @@ theta[4] = gamma/100
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
 R_mhe = 0.016  # study_mhe.best_params['R']
 N_mhe = 18  # study_mhe.best_params['N_mhe']
-param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [21, 21, 0.1 * np.diag([10, 1])]
+param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 0.1 * np.diag([10, 1])]
 
+param_ekf = [Q_est, R_est, P0_est, 30, 30, 19 * np.diag([10, 1])]
+
+phase = 'induction'
+control_type = 'EKF-NMPC'
+Patient_number = 50
+training_patient = np.random.randint(0, 500, size=3)
+
+
+def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
+    np.random.seed(i)
+    # Generate random patient information with uniform distribution
+    age = np.random.randint(low=18, high=70)
+    height = np.random.randint(low=150, high=190)
+    weight = np.random.randint(low=50, high=100)
+    gender = np.random.randint(low=0, high=2)
+
+    start = time.perf_counter()
+    df_results = perform_simulation([age, height, weight, gender],
+                                    phase, control_type='MHE-NMPC',
+                                    control_param=param_mhe, random_bool=[True, True])
+    end = time.perf_counter()
+    print(f" Time to perform {phase} phase : {end-start} s")
+    if output == 'IAE':
+        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
+        return IAE
+    elif output == 'dataframe':
+        return df_results
+    else:
+        return
+
+
+local_cost = partial(small_obj, mhe_nmpc_param=param_mhe, output='dataframe')
 
 start = time.perf_counter()
+# with mp.Pool(mp.cpu_count()-1) as p:
+#     r = list(p.map(local_cost, training_patient))
 df = perform_simulation([30, 170, 70, 0], phase, control_type=control_type,
-                        control_param=param_mhe, random_bool=[True, True])
-end = time.perf_counter()
+                        control_param=param_ekf, random_bool=[True, True])
 
+end = time.perf_counter()
+# df = r[0]
 print(f" Time to perform {phase} phase : {end-start} s")
 print(f" Mean step time : {df['step_time'].mean()} s")
 plt.figure()

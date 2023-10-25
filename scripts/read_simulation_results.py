@@ -9,27 +9,26 @@ Created on Tue Nov 22 17:16:03 2022
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 # Local imports
 from python_anesthesia_simulator import metrics
 
 
 Number_of_patient = 500
-phase = 'total'
+phase = 'induction'
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
-title = 'NMPC'
-title = 'multi_NMPC'
-title = 'MHE_NMPC'
-title = 'MPC'
-# title = 'PID'
-# title = 'NMPC_int_induction'
-# title = 'multi_MMPC_int'
+
+title = 'PID'
+# title = 'MEKF_NMPC'
+# title = 'EKF_NMPC'
+# title = 'MHE_NMPC'
 if title == 'PID':
     ts = 1
 else:
     ts = 2
-Data = pd.read_csv("./Results_data/result_" + title + "_" + phase + "_n=" + str(Number_of_patient) + '.csv')
+Data = pd.read_csv(f"./Results_data/{title}_{phase}_{Number_of_patient}.csv")
 
 
 if phase == 'induction':
@@ -53,8 +52,8 @@ plt.plot(Time, BIS_data, linewidth=0.2, color='b')
 plt.plot(Time, np.nanmean(BIS_data, axis=1), linewidth=1, color='r')
 plt.ylabel('BIS')
 plt.grid()
-Up_data = Data[[f"{i}_Up" for i in range(Number_of_patient)]].to_numpy()
-Ur_data = Data[[f"{i}_Ur" for i in range(Number_of_patient)]].to_numpy()
+Up_data = Data[[f"{i}_u_propo" for i in range(Number_of_patient)]].to_numpy()
+Ur_data = Data[[f"{i}_u_remi" for i in range(Number_of_patient)]].to_numpy()
 
 plt.subplot(2, 1, 2)
 plt.plot(Time, Up_data, linewidth=0.5, color='b', alpha=0.1)
@@ -68,9 +67,7 @@ plt.savefig('./Results_Images/BIS_' + title + '_n=' + str(Number_of_patient) + '
 plt.show()
 
 
-for i in range(Number_of_patient):  # Number_of_patient
-    # for i in range(108, 109):
-    print(i)
+for i in tqdm(range(Number_of_patient)):  # Number_of_patient
 
     BIS = Data[str(i) + '_BIS']
     Time = np.arange(0, len(BIS)) * ts / 60
@@ -156,4 +153,4 @@ styler.hide(axis='index')
 styler.format(precision=2)
 print(styler.to_latex())
 
-result_table.to_csv("./Results_data/result_table" + title + "_n=" + str(Number_of_patient))
+result_table.to_csv(f"./Results_data/result_table_{title}_{phase}_{Number_of_patient}.csv")

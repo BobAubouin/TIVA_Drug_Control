@@ -225,7 +225,7 @@ class EKF_integrator_new:
         self.Biso = [BIS(self.x[3], self.x[7], BIS_param)]
         self.error = 0
 
-    def estimate(self, u: list, bis: float) -> tuple[list, float]:
+    def one_step(self, u: list, bis: float) -> tuple[list, float]:
         """
         Estimate the state given past input and current measurement.
 
