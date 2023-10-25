@@ -49,9 +49,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_1",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=1000)
+study.optimize(objective, n_trials=1000)
 
 print(study.best_params)
 
@@ -103,6 +103,7 @@ plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
 plt.grid()
+plt.savefig(f"./Results_Images/PID_{phase}_{Patient_number}.png", dpi=300)
 plt.show()
 
 print(f"mean computation time: {np.mean(final_df.loc[:, final_df.columns.str.endswith('step_time')])}s")

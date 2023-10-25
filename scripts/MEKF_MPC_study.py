@@ -12,7 +12,7 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'induction'
 control_type = 'MEKF_NMPC'
-Patient_number = 50
+Patient_number = 500
 
 
 np.random.seed(0)
@@ -136,7 +136,7 @@ MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
 
 
 def objective(trial):
-    N = trial.suggest_int('N', 10, 30)
+    N = 30
     R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
     Nu = N
     Q9 = trial.suggest_float('Q_9', 1.e-4, 10, log=True)
@@ -151,13 +151,13 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_2",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=10)
+study.optimize(objective, n_trials=200)
 
 print(study.best_params)
 
-MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R']]
+MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R']* np.diag([10, 1])]
 Q9 = study.best_params['Q_9']
 Q_est = MEKF_param[0]
 Q_est[-1, -1] = Q9
@@ -210,6 +210,8 @@ plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
 plt.grid()
+plt.savefig(f"./Results_Images/MEKF_MPC_{phase}_{Patient_number}.png", dpi=300)
+
 plt.show()
 
 

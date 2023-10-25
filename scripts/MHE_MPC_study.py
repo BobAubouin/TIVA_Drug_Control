@@ -39,13 +39,13 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
 
 
 # %% set observer parameters
-study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
-gamma = 5.477  # study_mhe.best_params['eta']
+# study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
+gamma = 0.105  # study_mhe.best_params['eta']
 theta = [gamma, 0, 0, 0]*4
 theta[4] = gamma/100
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R_mhe = 0.5652  # study_mhe.best_params['R']
-N_mhe = 30  # study_mhe.best_params['N_mhe']
+R_mhe = 0.016  # study_mhe.best_params['R']
+N_mhe = 18  # study_mhe.best_params['N_mhe']
 MHE_param = [Q_mhe, R_mhe, N_mhe, theta]
 
 
@@ -67,11 +67,11 @@ def objective(trial):
 # %% Tuning of the controler
 study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=10)
+# study.optimize(objective, n_trials=100)
 
 print(study.best_params)
 
-MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R']]
+MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R'] * np.diag([10, 1])]
 theta_d = study.best_params['theta_d']
 theta = MHE_param[3]
 theta[12] = gamma * theta_d
@@ -119,7 +119,7 @@ plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u
 
 plt.plot([], [], 'r', linewidth=linewidth, label='propofol')
 plt.plot([], [], 'b', linewidth=linewidth, label='remifentanil')
-
+plt.savefig(f"./Results_Images/MHE_MPC_{phase}_{Patient_number}.png", dpi=300)
 plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
