@@ -110,14 +110,13 @@ param = MEKF_param + [21, 21, 19 * np.diag([16, 1])]
 
 
 study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
-gamma = 5.477  # study_mhe.best_params['eta']
+gamma = 0.105  # study_mhe.best_params['eta']
 theta = [gamma, 0, 0, 0]*4
 theta[4] = gamma/100
-theta[12] = gamma*100
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R_mhe = 0.5652  # study_mhe.best_params['R']
-N_mhe = 30  # study_mhe.best_params['N_mhe']
-param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [21, 21, 19 * np.diag([10, 1])]
+R_mhe = 0.016  # study_mhe.best_params['R']
+N_mhe = 18  # study_mhe.best_params['N_mhe']
+param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [21, 21, 0.1 * np.diag([10, 1])]
 
 
 start = time.perf_counter()

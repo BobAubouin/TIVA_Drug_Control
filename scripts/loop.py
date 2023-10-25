@@ -37,7 +37,8 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
     else:
         ts = 2
 
-    patient_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=random_bool[0], random_PD=random_bool[1])
+    patient_simu = pas.Patient(Patient_info, save_data_bool=False,
+                               random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld', ts=ts)
 
     # define input constraints
     bis_target = 50
