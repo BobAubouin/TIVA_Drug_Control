@@ -49,9 +49,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=1000)
+study.optimize(objective, n_trials=500)
 
 print(study.best_params)
 
@@ -70,7 +70,7 @@ final_df = pd.DataFrame()
 for i, df in enumerate(res):
     df.rename(columns={'Time': f"{i}_Time",
                        'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}u_propo",
+                       "u_propo": f"{i}_u_propo",
                        "u_remi": f"{i}_u_remi",
                        "step_stime": f"{i}_step_time"}, inplace=True)
 

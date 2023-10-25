@@ -19,7 +19,7 @@ np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
 
-def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
+def small_obj(i: int, ekf_nmpc_param: list, output: str = 'IAE'):
     np.random.seed(i)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
@@ -28,7 +28,7 @@ def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
     gender = np.random.randint(low=0, high=2)
 
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='EKF-NMPC',
-                                    control_param=mekf_nmpc_param, random_bool=[True, True])
+                                    control_param=ekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
         IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
         return IAE
@@ -44,19 +44,19 @@ Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 
 R_est = study_petri.best_params['R']
 P0_est = 1e-3 * np.eye(9)
 
-MEKF_param = [Q_est, R_est, P0_est]
+EKF_param = [Q_est, R_est, P0_est]
 
 
 def objective(trial):
-    N = trial.suggest_int('N', 10, 30)
+    N = 30
     R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
     Nu = N
     Q9 = trial.suggest_float('Q_9', 1.e-4, 10, log=True)
-    Q_est = MEKF_param[0]
+    Q_est = EKF_param[0]
     Q_est[-1, -1] = Q9
-    MEKF_param[0] = Q_est
-    mekf_nmpc_param = MEKF_param + [N, Nu, R]
-    local_cost = partial(small_obj, mekf_nmpc_param=mekf_nmpc_param)
+    EKF_param[0] = Q_est
+    ekf_nmpc_param = EKF_param + [N, Nu, R]
+    local_cost = partial(small_obj, ekf_nmpc_param=ekf_nmpc_param)
     with mp.Pool(mp.cpu_count()-1) as p:
         r = list(p.imap(local_cost, training_patient))
     return max(r)
@@ -65,23 +65,23 @@ def objective(trial):
 # %% Tuning of the controler
 study = optuna.create_study(direction='minimize', study_name=f"EKF_MPC_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=10)
+study.optimize(objective, n_trials=100)
 
 print(study.best_params)
 
-MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R']]
+MPC_param = [30, 30, study.best_params['R'] * np.diag([10, 1])]
 Q9 = study.best_params['Q_9']
-Q_est = MEKF_param[0]
+Q_est = EKF_param[0]
 Q_est[-1, -1] = Q9
-MEKF_param[0] = Q_est
-mekf_nmpc_param = MEKF_param + MPC_param
+EKF_param[0] = Q_est
+mekf_nmpc_param = EKF_param + MPC_param
 
 # %% test on all patient
 
-test_func = partial(small_obj, mekf_nmpc_param=mekf_nmpc_param, output='dataframe')
+test_func = partial(small_obj, ekf_nmpc_param=mekf_nmpc_param, output='dataframe')
 
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test MEKF MPC'))
+    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test EKF MPC'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
@@ -89,14 +89,14 @@ final_df = pd.DataFrame()
 for i, df in enumerate(res):
     df.rename(columns={'Time': f"{i}_Time",
                        'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}u_propo",
+                       "u_propo": f"{i}_u_propo",
                        "u_remi": f"{i}_u_remi",
                        "step_stime": f"{i}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 
 
-final_df.to_csv(f"./Results_data/MEKF_MPC_{phase}_{Patient_number}.csv")
+final_df.to_csv(f"./Results_data/EKF_NMPC_{phase}_{Patient_number}.csv")
 
 print("Done!")
 
@@ -117,11 +117,11 @@ plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u
 
 plt.plot([], [], 'r', linewidth=linewidth, label='propofol')
 plt.plot([], [], 'b', linewidth=linewidth, label='remifentanil')
-
 plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
 plt.grid()
+plt.savefig(f"./Results_Images/EKF_NMPC_{phase}_{Patient_number}.png", dpi=300)
 plt.show()
 
 

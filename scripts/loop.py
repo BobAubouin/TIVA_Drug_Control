@@ -51,7 +51,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
                          N=5, Ts=ts, umax=max(up_max, ur_max / control_param[3]), umin=0)
     else:
         # get Nominal model from the patient info
-        Patient_nominal_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=False, random_PD=False)
+        Patient_nominal_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=False, random_PD=False, model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld')
         Ap = Patient_nominal_simu.propo_pk.continuous_sys.A[:4, :4]
         Bp = Patient_nominal_simu.propo_pk.continuous_sys.B[:4]
         Ar = Patient_nominal_simu.remi_pk.continuous_sys.A[:4, :4]

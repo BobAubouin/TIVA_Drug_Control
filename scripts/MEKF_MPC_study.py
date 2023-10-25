@@ -51,9 +51,25 @@ design_param = [lambda_1, lambda_2, nu, epsilon]
 
 BIS_param_nominal = pas.BIS_model().hill_param
 
-cv_c50p = 0.182
-cv_c50r = 0.888
-cv_gamma = 0.304
+model_bis = 'Aubouin'
+
+if model_bis =='Bouillon':
+    mean_c50p = 4.47
+    mean_c50r = 19.3
+    mean_gamma = 1.13
+    cv_c50p = 0.182
+    cv_c50r = 0.888
+    cv_gamma = 0.304
+elif model_bis == 'Aubouin':
+    mean_c50p = 4.42
+    mean_c50r = 33.4
+    mean_gamma = 1.73
+    cv_c50p = 0.36
+    cv_c50r = 0.11
+    cv_gamma = 0.60 
+
+
+
 # estimation of log normal standard deviation
 w_c50p = np.sqrt(np.log(1+cv_c50p**2))
 w_c50r = np.sqrt(np.log(1+cv_c50r**2))
@@ -88,9 +104,6 @@ def get_probability(c50p_set: list, c50r_set: list, gamma_set: list, method: str
         propability of the parameter set.
     """
     if method == 'proportional':
-        mean_c50p = 4.47
-        mean_c50r = 19.3
-        mean_gamma = 1.13
         # cv_c50p = 0.182
         # cv_c50r = 0.888
         # cv_gamma = 0.304
@@ -151,9 +164,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_2",
+study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_4",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=200)
+study.optimize(objective, n_trials=100)
 
 print(study.best_params)
 
@@ -177,14 +190,14 @@ final_df = pd.DataFrame()
 for i, df in enumerate(res):
     df.rename(columns={'Time': f"{i}_Time",
                        'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}u_propo",
+                       "u_propo": f"{i}_u_propo",
                        "u_remi": f"{i}_u_remi",
                        "step_stime": f"{i}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 
 
-final_df.to_csv(f"./Results_data/MEKF_MPC_{phase}_{Patient_number}.csv")
+final_df.to_csv(f"./Results_data/MEKF_NMPC_{phase}_{Patient_number}.csv")
 
 print("Done!")
 
@@ -210,7 +223,7 @@ plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
 plt.grid()
-plt.savefig(f"./Results_Images/MEKF_MPC_{phase}_{Patient_number}.png", dpi=300)
+plt.savefig(f"./Results_Images/MEKF_NMPC_{phase}_{Patient_number}.png", dpi=300)
 
 plt.show()
 

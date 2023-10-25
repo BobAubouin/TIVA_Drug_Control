@@ -65,9 +65,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_3",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=100)
+# study.optimize(objective, n_trials=100, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -82,8 +82,9 @@ mhe_nmpc_param = MHE_param + MPC_param
 
 test_func = partial(small_obj, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
 
+print(mp.cpu_count())
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test MEKF MPC'))
+    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test MHE MPC'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
@@ -91,14 +92,14 @@ final_df = pd.DataFrame()
 for i, df in enumerate(res):
     df.rename(columns={'Time': f"{i}_Time",
                        'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}u_propo",
+                       "u_propo": f"{i}_u_propo",
                        "u_remi": f"{i}_u_remi",
                        "step_stime": f"{i}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 
 
-final_df.to_csv(f"./Results_data/MEKF_MPC_{phase}_{Patient_number}.csv")
+final_df.to_csv(f"./Results_data/MHE_NMPC_{phase}_{Patient_number}.csv")
 
 print("Done!")
 
@@ -119,11 +120,11 @@ plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u
 
 plt.plot([], [], 'r', linewidth=linewidth, label='propofol')
 plt.plot([], [], 'b', linewidth=linewidth, label='remifentanil')
-plt.savefig(f"./Results_Images/MHE_MPC_{phase}_{Patient_number}.png", dpi=300)
 plt.ylabel('Drug rates')
 plt.xlabel('Time(min)')
 plt.legend()
 plt.grid()
+plt.savefig(f"./Results_Images/MHE_NMPC_{phase}_{Patient_number}.png", dpi=300)
 plt.show()
 
 
