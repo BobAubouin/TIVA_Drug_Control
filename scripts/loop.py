@@ -2,7 +2,7 @@ from time import perf_counter
 import numpy as np
 import pandas as pd
 import python_anesthesia_simulator as pas
-from estimators import MEKF, MHE_integrator, EKF_integrator_new
+from estimators import MEKF, MHE_integrator, EKF_integrator_new, MEKF_MHE
 from controller import PID, NMPC_integrator
 
 
@@ -23,6 +23,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         - for EKF-NMPC [Q_ekf, R_ekf, P0_ekf, N, Nu, R_nmpc]
         - for MEKF-NMPC [Q_est, R_est, P0_est, grid_vector, eta0, design_param, N, Nu, R_nmpc]
         - for MHE-NMPC [Q_mhe, R_mhe, N_mhe, theta, N, Nu, R_nmpc]
+        - for MEKF-MHE-NMPC [Q_est, R_est, P0_est, grid_vector, eta0, design_param, Q_mhe, R_mhe, N_mhe, theta, switch_time, N, Nu, R_nmpc]
     random_bool : list
         list of len 2, first index to add uncertainty in the PK model and second index to add uncertainty in the PD model.
 
@@ -70,17 +71,22 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
             estimator = EKF_integrator_new(A, B, BIS_param_nominal, ts,
                                            Q=control_param[0], R=control_param[1], P0=control_param[2])
             controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[3], Nu=control_param[4],
-                                         R=control_param[5], umax=[up_max, ur_max], umin=[0, 0])
+                                         R=control_param[5], umax=[up_max, ur_max], umin=[0, 0], bool_u_eq=True)
         elif control_type == 'MEKF-NMPC':
             estimator = MEKF(A, B, ts=ts, Q=control_param[0], R=control_param[1], P0=control_param[2],
                              grid_vector=control_param[3], eta0=control_param[4], design_param=control_param[5])
             controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[6], Nu=control_param[7],
-                                         R=control_param[8], umax=[up_max, ur_max], umin=[0, 0])
+                                         R=control_param[8], umax=[up_max, ur_max], umin=[0, 0], bool_u_eq=True)
         elif control_type == 'MHE-NMPC':
             estimator = MHE_integrator(
                 A_mhe, B_mhe, BIS_param_nominal, ts, Q=control_param[0], R=control_param[1], N_MHE=control_param[2], theta=control_param[3])
             controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[4], Nu=control_param[5],
-                                         R=control_param[6], umax=[up_max, ur_max], umin=[0, 0])
+                                         R=control_param[6], umax=[up_max, ur_max], umin=[0, 0], bool_u_eq=True)
+        elif control_type == 'MEKF-MHE-NMPC':
+            estimator = MEKF_MHE(
+                A, B, BIS_param_nominal, A_mhe, B_mhe, ts=ts, mekf_param=control_param[0:6], mhe_param=control_param[6:10], switch_time=control_param[10])
+            controller = NMPC_integrator(A, B, BIS_param_nominal, ts, N=control_param[11], Nu=control_param[12],
+                                         R=control_param[13], umax=[up_max, ur_max], umin=[0, 0], bool_u_eq=True)
 
     # define dataframe to return
     df = pd.DataFrame(columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
@@ -117,4 +123,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         line = pd.DataFrame([[i*ts, bis[0], u_propo, u_remi, end-start]],
                             columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
         df = pd.concat((df, line))
+        # if control_type == 'MHE-NMPC':
+        #     df['u_propo_target'].loc[i] = controller.ueq[0]
+        #     df['u_remi_target'].loc[i] = controller.ueq[1]
     return df
