@@ -338,7 +338,7 @@ class MEKF:
         """
         # estimate the state for each EKF
         for i, ekf in enumerate(self.EKF_list):
-            ekf.estimate(u, measurement)
+            ekf.one_step(u, measurement)
             error = measurement - ekf.bis
             K_i = np.array(ekf.K)
             self.eta[i] += self.ts*(-self.nu*self.eta[i] + self.lambda_1 * error **
@@ -694,10 +694,10 @@ class MHE_integrator:
 
         Parameters
         ----------
-        Bis : float
-            BIS value at time t
         u : list
             propofol and remifentanil infusion rate at time t-1
+        Bis : float
+            BIS value at time t
 
         Returns
         -------
@@ -791,3 +791,78 @@ class MHE_integrator:
         bis = float(self.output(x=self.x[:, [-1]])['bis'])
         x_return = np.concatenate([self.x[:8, -1], self.x[[11], -1], self.x[8:11, -1]])
         return x_return, bis
+
+
+class MEKF_MHE:
+    """Implementation of the Multiples extended Kalman filter and Moving Horizon Estimator for the Coadministration of propofol and remifentanil in Anesthesia.
+
+    Parameters
+    ----------
+    A : list
+        Dynamic matric of the continuous system dx/dt = Ax + Bu.
+    B : list
+        Input matric of the continuous system dx/dt = Ax + Bu.
+    mekf_param : list
+        list of MEKF parameter [Q, R, P0, grid_vector, eta0, design_param]
+    mhe_param : list
+        list of MHE parameter [Q, R, N_MHE, theta]
+    ts : float, optional
+        Sampling time of the system (s). The default is 1.
+    switch_time : float, optional
+        Time at which the MHE is used instead of the MEKF (s). The default is 120.
+    Returns
+    -------
+    None.
+
+    """
+
+    def __init__(self, A_mekf: list, B_mekf: list, BIS_param: list, A_mhe: list, B_mhe: list, mekf_param: list, mhe_param: list, ts: float = 1, switch_time: float = 120) -> None:
+        """init the MEKF_MHE class."""
+
+        self.MEKF_estimator = MEKF(A_mekf, B_mekf, ts=ts, Q=mekf_param[0], R=mekf_param[1], P0=mekf_param[2],
+                                   grid_vector=mekf_param[3], eta0=mekf_param[4], design_param=mekf_param[5])
+        self.MHE_estimator = MHE_integrator(A_mhe, B_mhe, BIS_param, ts=ts,
+                                            Q=mhe_param[0], R=mhe_param[1], N_MHE=mhe_param[2], theta=mhe_param[3])
+
+        self.ts = ts
+        self.switch_time = switch_time
+        self.change_flag = False
+        self.time = 0
+        self.X = np.zeros((12, mhe_param[2]))
+        self.bis = np.zeros(mhe_param[2])
+        self.u = np.zeros((2*mhe_param[2]))
+
+    def one_step(self, u: list, measurement: float) -> tuple[list, float]:
+        """
+        Compute one step of the MEKF_MHE.
+
+        Parameters
+        ----------
+        u : list
+            propofol and remifentanil infusion rate at time t-1
+        measurement : float
+            BIS value at time t
+
+        Returns
+        -------
+        tuple[np.array, float]
+             state estimation and BIS estimated at time t
+        """
+        self.time += self.ts
+        if self.time < self.switch_time:
+            x, Bis = self.MEKF_estimator.one_step(u, measurement)
+            self.X = np.concatenate((self.X[:, 1:], x.reshape(12, 1)), axis=1)
+            self.bis = np.concatenate((self.bis[1:], [measurement]))
+            self.u = np.concatenate((self.u[2:], np.array(u)))
+        else:
+            if not self.change_flag:
+                self.MHE_estimator.x_pred = self.X.reshape(
+                    self.MHE_estimator.nb_states*self.MHE_estimator.N_mhe, order='F')
+                self.MHE_estimator.y = list(self.bis)
+                self.MHE_estimator.u = self.u
+
+                self.change_flag = True
+
+            x, Bis = self.MHE_estimator.one_step(u, measurement)
+
+        return x, Bis
