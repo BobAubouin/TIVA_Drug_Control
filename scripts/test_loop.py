@@ -110,18 +110,25 @@ param = MEKF_param + [30, 30, 19 * np.diag([16, 1])]
 
 study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
 gamma = 0.105  # study_mhe.best_params['eta']
-theta = [gamma, 0, 0, 0]*4
+theta = [gamma, 800, 100, 0.005]*4
 theta[4] = gamma/100
+theta[12] = gamma*10
+theta[13] = 300
+theta[15] = 0.05
+
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
 R_mhe = 0.016  # study_mhe.best_params['R']
 N_mhe = 18  # study_mhe.best_params['N_mhe']
-param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 0.1 * np.diag([10, 1])]
+param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 30 * np.diag([10, 1])]
 
 param_ekf = [Q_est, R_est, P0_est, 30, 30, 19 * np.diag([10, 1])]
 
+parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
+                  Q_mhe, R_mhe, N_mhe, theta, 120, 30, 30, 19 * np.diag([10, 1])]
+
 phase = 'induction'
-control_type = 'EKF-NMPC'
-Patient_number = 50
+control_type = 'MEKF-MHE-NMPC'
+Patient_number = 280
 training_patient = np.random.randint(0, 500, size=3)
 
 
@@ -136,7 +143,7 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     start = time.perf_counter()
     df_results = perform_simulation([age, height, weight, gender],
                                     phase, control_type='MHE-NMPC',
-                                    control_param=param_mhe, random_bool=[True, True])
+                                    control_param=mhe_nmpc_param, random_bool=[True, True])
     end = time.perf_counter()
     print(f" Time to perform {phase} phase : {end-start} s")
     if output == 'IAE':
@@ -148,13 +155,12 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
         return
 
 
-local_cost = partial(small_obj, mhe_nmpc_param=param_mhe, output='dataframe')
+local_cost = partial(small_obj, mhe_nmpc_param=param, output='dataframe')
 
 start = time.perf_counter()
 # with mp.Pool(mp.cpu_count()-1) as p:
 #     r = list(p.map(local_cost, training_patient))
-df = perform_simulation([30, 170, 70, 0], phase, control_type=control_type,
-                        control_param=param_ekf, random_bool=[True, True])
+df = small_obj(Patient_number, mhe_nmpc_param=param_mhe, output='dataframe')
 
 end = time.perf_counter()
 # df = r[0]

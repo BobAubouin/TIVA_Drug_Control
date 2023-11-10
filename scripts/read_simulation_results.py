@@ -18,14 +18,18 @@ from python_anesthesia_simulator import metrics
 Number_of_patient = 500
 phase = 'induction'
 
+np.random.seed(0)
+training_patient = np.random.randint(0, Number_of_patient, size=16)
+
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
 
 title = 'PID'
 # title = 'MEKF_NMPC'
 # title = 'EKF_NMPC'
-# title = 'MHE_NMPC'
+title = 'MHE_NMPC'
+print(f"Reading {title} results")
 if title == 'PID':
-    ts = 1
+    ts = 2
 else:
     ts = 2
 Data = pd.read_csv(f"./Results_data/{title}_{phase}_{Number_of_patient}.csv")
@@ -45,10 +49,24 @@ elif phase == 'maintenance':
     BIS_NADIRn_list = []
 
 BIS_data = Data[[f"{i}_BIS" for i in range(Number_of_patient)]].to_numpy()
+BIS_data_training = Data[[f"{i}_BIS" for i in training_patient]].to_numpy()
 Time = np.arange(0, len(Data)) * ts / 60
+
+IAE = np.sum(np.abs(BIS_data[:, training_patient] - 50)**2 * ts, axis=0)
+
+# create a metric which penalize two time more BIS under 50 that upside
+# IAE = np.sum((BIS_data[:, training_patient] - 50)*(1-3*((BIS_data[:, training_patient] - 50) < 0)) * ts, axis=0)
+
+
+print(f"Training IAE : {np.max(IAE)}")
+print(f"Patient training with max IAE : {training_patient[np.argmax(IAE)]}")
+
+
 plt.subplot(2, 1, 1)
 plt.title(title + ' ' + phase)
-plt.plot(Time, BIS_data, linewidth=0.2, color='b')
+plt.plot(Time, BIS_data, linewidth=1, color='b')
+plt.plot(Time, BIS_data_training, linewidth=1, color='green', alpha=1)
+plt.plot(Time, BIS_data_training[:, np.argmax(IAE)], linewidth=1, color='orange', alpha=1)
 plt.plot(Time, np.nanmean(BIS_data, axis=1), linewidth=1, color='r')
 plt.ylabel('BIS')
 plt.grid()

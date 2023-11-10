@@ -375,7 +375,7 @@ class NMPC_integrator:
     def __init__(self, A: list, B: list, BIS_param: list, ts: float = 1,
                  N: int = 10, Nu: int = 10, R: list = np.diag([2, 1]),
                  umax: list = [1e10]*2, umin: list = [0]*2,
-                 dumax: list = [0.2, 0.4], dumin: list = [-0.2, -0.4],
+                 dumax: list = [1e10, 1e10], dumin: list = [-1e10, -1e10],
                  bool_u_eq: bool = False):
         """Init NMPC class."""
         Ad, Bd = discretize(A, B, ts)

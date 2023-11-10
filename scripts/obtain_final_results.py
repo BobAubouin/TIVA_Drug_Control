@@ -12,11 +12,11 @@ import matplotlib.colors as mcolors
 
 
 # plot config
-matplotlib.rcParams['pdf.fonttype'] = 42
-matplotlib.rcParams['ps.fonttype'] = 42
+# matplotlib.rcParams['pdf.fonttype'] = 42
+# matplotlib.rcParams['ps.fonttype'] = 42
 
-plt.rc('text', usetex=True)
-plt.rc('font', family='serif')
+# plt.rc('text', usetex=True)
+# plt.rc('font', family='serif')
 
 # First figure: specific case
 """
@@ -81,7 +81,7 @@ except FileNotFoundError:
     print("No data available for PID")
 
 try:
-    Data_NMPC = pd.read_csv(f"{folder_path}MHE_NMPC_{phase}_{Number_of_patient}.csv")
+    Data_NMPC = pd.read_csv(f"{folder_path}EKF_NMPC_{phase}_{Number_of_patient}.csv")
     bool_NMPC = True
 except FileNotFoundError:
     print("No data available for NMPC")
@@ -93,7 +93,7 @@ except FileNotFoundError:
     print("No data available for MMPC")
 
 try:
-    Data_MHEMPC = pd.read_csv(folder_path + "result_MHE_NMPC_" + phase + '_n=' + str(Number_of_patient) + '.csv')
+    Data_MHEMPC = pd.read_csv(f"{folder_path}MHE_NMPC_{phase}_{Number_of_patient}.csv")
     bool_MHEMPC = True
 except FileNotFoundError:
     print("No data available for MHEMPC")
@@ -118,6 +118,7 @@ for patient_id in range(1, Number_of_patient):
         if np.min(Data_MHEMPC[str(patient_id)+'_BIS']) < np.min(Data_MHEMPC[str(Patient_id_min_MHEMPC)+'_BIS']):
             Patient_id_min_MHEMPC = patient_id
 
+print(f"worst patient for EKF-MPC: {Patient_id_min_NMPC}")
 print(f"worst patient for MHE-MPC: {Patient_id_min_MHEMPC}")
 if bool_PID:
     BIS_PID = Data_PID[str(Patient_id_min_PID)+'_BIS']
@@ -131,9 +132,13 @@ if bool_MHEMPC:
 ts_PID = 1
 ts_MPC = 2
 if bool_PID:
-    Time_PID = np.arange(0, len(BIS_PID)) * ts_PID / 60
+    Time_PID = Data_PID['0_Time'] / 60
 if bool_NMPC:
-    Time_MPC = np.arange(0, len(BIS_NMPC)) * ts_MPC / 60
+    Time_MPC = Data_NMPC['0_Time'] / 60
+elif bool_NMPC:
+    Time_MPC = Data_MMPC['0_Time'] / 60
+elif bool_MHEMPC:
+    Time_MPC = Data_MHEMPC['0_Time'] / 60
 
 if bool_PID:
     Up_PID = Data_PID[str(Patient_id_min_PID)+'_u_propo']
@@ -339,10 +344,10 @@ Q9 = theta[4] + theta[5]*np.exp(-theta[6]*np.exp(-theta[7]*time))
 Q10 = theta[8] + theta[9]*np.exp(-theta[10]*np.exp(-theta[11]*time))
 Q11 = theta[12] + theta[13]*(1-np.exp(-theta[14]*np.exp(-theta[15]*time)))
 
-plt.plot(time, Q8, label='Q8')
-plt.plot(time, Q9, label='Q9')
-plt.plot(time, Q10, label='Q10')
-plt.plot(time, Q11, label='Q11')
+plt.plot(time/60, Q8, label='Q8')
+plt.plot(time/60, Q9, label='Q9')
+plt.plot(time/60, Q10, label='Q10')
+plt.plot(time/60, Q11, label='Q11')
 plt.legend()
 plt.yscale('log')
 plt.grid()
