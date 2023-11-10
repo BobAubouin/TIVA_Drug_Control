@@ -30,7 +30,7 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MHE-NMPC',
                                     control_param=mhe_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
+        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -41,8 +41,11 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
 # %% set observer parameters
 # study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
 gamma = 0.105  # study_mhe.best_params['eta']
-theta = [gamma, 0, 0, 0]*4
+theta = [gamma, 800, 100, 0.005]*4
 theta[4] = gamma/100
+theta[12] = gamma*10
+theta[13] = 300
+theta[15] = 0.05
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
 R_mhe = 0.016  # study_mhe.best_params['R']
 N_mhe = 18  # study_mhe.best_params['N_mhe']
@@ -50,7 +53,7 @@ MHE_param = [Q_mhe, R_mhe, N_mhe, theta]
 
 
 def objective(trial):
-    N = trial.suggest_int('N', 10, 30)
+    N = 30
     R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
     Nu = N
     theta_d = trial.suggest_float('theta_d', 1.e-4, 10, log=True)
@@ -65,13 +68,13 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_3",
+study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=100, show_progress_bar=True)
+study.optimize(objective, n_trials=100, show_progress_bar=True)
 
 print(study.best_params)
 
-MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R'] * np.diag([10, 1])]
+MPC_param = [30, 30, study.best_params['R'] * np.diag([10, 1])]
 theta_d = study.best_params['theta_d']
 theta = MHE_param[3]
 theta[12] = gamma * theta_d
@@ -81,20 +84,21 @@ mhe_nmpc_param = MHE_param + MPC_param
 # %% test on all patient
 
 test_func = partial(small_obj, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
-
-print(mp.cpu_count())
+patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test MHE MPC'))
+    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test MHE'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
 
-for i, df in enumerate(res):
-    df.rename(columns={'Time': f"{i}_Time",
-                       'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}_u_propo",
-                       "u_remi": f"{i}_u_remi",
-                       "step_stime": f"{i}_step_time"}, inplace=True)
+for i in range(len(res)):
+    df = res[i]
+    patient_id = patient_list[i]
+    df.rename(columns={'Time': f"{patient_id}_Time",
+                       'BIS': f"{patient_id}_BIS",
+                       "u_propo": f"{patient_id}_u_propo",
+                       "u_remi": f"{patient_id}_u_remi",
+                       "step_stime": f"{patient_id}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 

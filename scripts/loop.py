@@ -33,13 +33,10 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         Dataframe with the results of the simulation.l
     """
     # define sampling time
-    if control_type == 'PID':
-        ts = 1
-    else:
-        ts = 2
+    ts = 2
 
     patient_simu = pas.Patient(Patient_info, save_data_bool=False,
-                               random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld', ts=ts)
+                               random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=ts)
 
     # define input constraints
     bis_target = 50
@@ -53,7 +50,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
     else:
         # get Nominal model from the patient info
         Patient_nominal_simu = pas.Patient(Patient_info, save_data_bool=False, random_PK=False,
-                                           random_PD=False, model_bis='Aubouin', model_propo='Eleveld', model_remi='Eleveld')
+                                           random_PD=False, model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld')
         Ap = Patient_nominal_simu.propo_pk.continuous_sys.A[:4, :4]
         Bp = Patient_nominal_simu.propo_pk.continuous_sys.B[:4]
         Ar = Patient_nominal_simu.remi_pk.continuous_sys.A[:4, :4]
@@ -93,7 +90,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
     u_propo, u_remi = 0, 0
     if phase == 'induction':
         N_simu = 10*60//ts
-        bool_noise = False
+        bool_noise = True
     else:
         N_simu = 20*60//ts
         bool_noise = True

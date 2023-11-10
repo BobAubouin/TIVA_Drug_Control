@@ -12,7 +12,7 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'induction'
 control_type = 'MEKF_NMPC'
-Patient_number = 50
+Patient_number = 500
 
 
 np.random.seed(0)
@@ -30,7 +30,7 @@ def small_obj(i: int, ekf_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='EKF-NMPC',
                                     control_param=ekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
+        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -49,9 +49,9 @@ EKF_param = [Q_est, R_est, P0_est]
 
 def objective(trial):
     N = 30
-    R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
+    R = trial.suggest_float('R', 0.1, 100, log=True) * np.diag([10, 1])
     Nu = N
-    Q9 = trial.suggest_float('Q_9', 1.e-4, 10, log=True)
+    Q9 = trial.suggest_float('Q_9', 1.e-1, 100, log=True)
     Q_est = EKF_param[0]
     Q_est[-1, -1] = Q9
     EKF_param[0] = Q_est
@@ -65,7 +65,7 @@ def objective(trial):
 # %% Tuning of the controler
 study = optuna.create_study(direction='minimize', study_name=f"EKF_MPC_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=100)
+study.optimize(objective, n_trials=100, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -79,19 +79,21 @@ mekf_nmpc_param = EKF_param + MPC_param
 # %% test on all patient
 
 test_func = partial(small_obj, ekf_nmpc_param=mekf_nmpc_param, output='dataframe')
-
+patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test EKF MPC'))
+    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test EKF'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
 
-for i, df in enumerate(res):
-    df.rename(columns={'Time': f"{i}_Time",
-                       'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}_u_propo",
-                       "u_remi": f"{i}_u_remi",
-                       "step_stime": f"{i}_step_time"}, inplace=True)
+for i in range(len(res)):
+    df = res[i]
+    patient_id = patient_list[i]
+    df.rename(columns={'Time': f"{patient_id}_Time",
+                       'BIS': f"{patient_id}_BIS",
+                       "u_propo": f"{patient_id}_u_propo",
+                       "u_remi": f"{patient_id}_u_remi",
+                       "step_stime": f"{patient_id}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 

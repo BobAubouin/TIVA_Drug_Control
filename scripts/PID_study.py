@@ -10,9 +10,7 @@ from functools import partial
 # parameter of the simulation
 phase = 'induction'
 control_type = 'PID'
-Patient_number = 500
-
-
+Patient_number = 100
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
@@ -28,7 +26,7 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='PID',
                                     control_param=pid_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
+        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -49,9 +47,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=500)
+study.optimize(objective, n_trials=500, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -60,19 +58,21 @@ pid_param = [study.best_params['K'], study.best_params['Ti'], study.best_params[
 # %% test on all patient
 
 test_func = partial(small_obj, pid_param=pid_param, output='dataframe')
-
+patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test PID'))
+    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test PID'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
 
-for i, df in enumerate(res):
-    df.rename(columns={'Time': f"{i}_Time",
-                       'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}_u_propo",
-                       "u_remi": f"{i}_u_remi",
-                       "step_stime": f"{i}_step_time"}, inplace=True)
+for i in range(len(res)):
+    df = res[i]
+    patient_id = patient_list[i]
+    df.rename(columns={'Time': f"{patient_id}_Time",
+                       'BIS': f"{patient_id}_BIS",
+                       "u_propo": f"{patient_id}_u_propo",
+                       "u_remi": f"{patient_id}_u_remi",
+                       "step_stime": f"{patient_id}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 

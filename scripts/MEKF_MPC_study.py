@@ -12,7 +12,7 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'induction'
 control_type = 'MEKF_NMPC'
-Patient_number = 500
+Patient_number = 100
 
 
 np.random.seed(0)
@@ -30,7 +30,7 @@ def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MEKF-NMPC',
                                     control_param=mekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
+        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -164,7 +164,7 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_4",
+study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_5",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
 study.optimize(objective, n_trials=100)
 
