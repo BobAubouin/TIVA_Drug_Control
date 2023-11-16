@@ -26,7 +26,7 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='PID',
                                     control_param=pid_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
+        IAE = np.sum((df_results['BIS'] - 50)**2*(1+((df_results['BIS'] - 50) < 0)) * 2, axis=0)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -47,7 +47,7 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
 study.optimize(objective, n_trials=500, show_progress_bar=True)
 

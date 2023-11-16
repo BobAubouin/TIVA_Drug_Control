@@ -12,7 +12,7 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'induction'
 control_type = 'MEKF_NMPC'
-Patient_number = 500
+Patient_number = 100
 
 
 np.random.seed(0)
@@ -30,10 +30,10 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MHE-NMPC',
                                     control_param=mhe_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
+        IAE = np.sum((df_results['BIS'] - 50)**2*(1+((df_results['BIS'] - 50) < 0)) * 2, axis=0)
         return IAE
     elif output == 'dataframe':
-        return df_results
+        return i, df_results
     else:
         return
 
@@ -68,9 +68,9 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_2",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=100, show_progress_bar=True)
+study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -92,8 +92,9 @@ print("Saving results...")
 final_df = pd.DataFrame()
 
 for i in range(len(res)):
-    df = res[i]
-    patient_id = patient_list[i]
+
+    df = res[i][1]
+    patient_id = res[i][0]
     df.rename(columns={'Time': f"{patient_id}_Time",
                        'BIS': f"{patient_id}_BIS",
                        "u_propo": f"{patient_id}_u_propo",

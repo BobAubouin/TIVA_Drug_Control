@@ -481,7 +481,7 @@ class NMPC_integrator:
             gbis += [bis]
             self.lbg_u += dumin
             self.ubg_u += dumax
-            self.lbg_bis += [30]
+            self.lbg_bis += [0]
             self.ubg_bis += [100]
 
         opts = {'ipopt.print_level': 1, 'print_time': 0, 'ipopt.max_iter': 300}

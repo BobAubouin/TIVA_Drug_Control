@@ -12,7 +12,7 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'induction'
 control_type = 'MEKF_NMPC'
-Patient_number = 500
+Patient_number = 100
 
 
 np.random.seed(0)
