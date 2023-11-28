@@ -10,7 +10,7 @@ from functools import partial
 
 
 study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
-Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 10])
+Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 0.0039])
 R_est = study_petri.best_params['R']
 P0_est = 1e-3 * np.eye(9)
 lambda_1 = 1
@@ -112,27 +112,29 @@ study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Resul
 gamma = 0.105  # study_mhe.best_params['eta']
 theta = [gamma, 800, 100, 0.005]*4
 theta[4] = gamma/100
-theta[12] = gamma*10
+theta[12] = gamma * 7.66
 theta[13] = 300
 theta[15] = 0.05
 
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
 R_mhe = 0.016  # study_mhe.best_params['R']
 N_mhe = 18  # study_mhe.best_params['N_mhe']
-param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 30 * np.diag([10, 1])]
+param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 256 * np.diag([4, 1])]
 
-param_ekf = [Q_est, R_est, P0_est, 30, 30, 19 * np.diag([10, 1])]
+param_ekf = [Q_est, R_est, P0_est, 30, 30, 434 * np.diag([2, 1])]
 
 parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
                   Q_mhe, R_mhe, N_mhe, theta, 120, 30, 30, 19 * np.diag([10, 1])]
 
-phase = 'induction'
+phase = 'total'
 control_type = 'MEKF-MHE-NMPC'
-Patient_number = 280
+Patient_number = 47
 training_patient = np.random.randint(0, 500, size=3)
 
+param_PID = [0.032, 738, 9, 2, 0.06, 738, 9]
 
-def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
+
+def small_obj(i: int, param: list, output: str = 'IAE'):
     np.random.seed(i)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
@@ -142,8 +144,8 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
 
     start = time.perf_counter()
     df_results = perform_simulation([age, height, weight, gender],
-                                    phase, control_type='MHE-NMPC',
-                                    control_param=mhe_nmpc_param, random_bool=[True, True])
+                                    phase, control_type='PID',
+                                    control_param=param, random_bool=[True, True])
     end = time.perf_counter()
     print(f" Time to perform {phase} phase : {end-start} s")
     if output == 'IAE':
@@ -155,12 +157,12 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
         return
 
 
-local_cost = partial(small_obj, mhe_nmpc_param=param, output='dataframe')
+local_cost = partial(small_obj, param=param_PID, output='dataframe')
 
 start = time.perf_counter()
 # with mp.Pool(mp.cpu_count()-1) as p:
 #     r = list(p.map(local_cost, training_patient))
-df = small_obj(Patient_number, mhe_nmpc_param=param_mhe, output='dataframe')
+df = small_obj(Patient_number, param=param_PID, output='dataframe')
 
 end = time.perf_counter()
 # df = r[0]

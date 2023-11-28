@@ -8,7 +8,7 @@ import multiprocessing as mp
 from functools import partial
 
 # parameter of the simulation
-phase = 'induction'
+phase = 'total'
 control_type = 'PID'
 Patient_number = 100
 np.random.seed(0)
@@ -26,7 +26,8 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='PID',
                                     control_param=pid_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum((df_results['BIS'] - 50)**2*(1+((df_results['BIS'] - 50) < 0)) * 2, axis=0)
+        mask = df_results['BIS'] > 50
+        IAE = np.sum((df_results['BIS'] - 50)**3 * mask + (df_results['BIS'] - 50)**4 * (~mask), axis=0)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -34,12 +35,23 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
         return
 
 
+if phase == 'total':
+    study = optuna.create_study(direction='minimize', study_name=f"PID_induction_6",
+                                storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
+    induction_param = [study.best_params['K'], study.best_params['Ti'], study.best_params['Td'], 2]
+
+
 def objective(trial):
+
     K = trial.suggest_float('K', 1.e-3, 1)
-    Ti = trial.suggest_float('Ti', 100, 600)
+    Ti = trial.suggest_float('Ti', 100, 800)
     Td = trial.suggest_float('Td', 0.1, 20)
     ratio = 2
-    pid_param = [K, Ti, Td, ratio]
+    if phase == 'induction':
+        pid_param = [K, Ti, Td, ratio]
+    else:
+        pid_param = induction_param + [K, Ti, Td]
+
     local_cost = partial(small_obj, pid_param=pid_param)
     with mp.Pool(mp.cpu_count()-1) as p:
         r = list(p.imap(local_cost, training_patient))
@@ -47,7 +59,7 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
 study.optimize(objective, n_trials=500, show_progress_bar=True)
 

@@ -96,27 +96,34 @@ class PID():
         control_input: float
             control value computed by the PID.
         """
-        error = -(Bis_target - BIS)
-        self.integral_part += self.Ts / self.Ti * error
+        self.error = -(Bis_target - BIS)
+        self.integral_part += self.Ts / self.Ti * self.error
 
         self.derivative_part = (self.derivative_part * self.Td / self.N +
                                 self.Td * (BIS - self.last_BIS)) / (self.Ts +
                                                                     self.Td / self.N)
         self.last_BIS = BIS
 
-        control_input = self.Kp * (error + self.integral_part + self.derivative_part)
+        self.control_input = self.Kp * (self.error + self.integral_part + self.derivative_part)
 
         # Anti windup Conditional Integration from
         # Visioli, A. (2006). Anti-windup strategies. Practical PID control, 35-60.
-        if (control_input >= self.umax) and control_input * error <= 0:
-            self.integral_part = self.umax / self.Kp - error - self.derivative_part
-            control_input = np.array(self.umax)
+        if (self.control_input >= self.umax) and self.control_input * self.error <= 0:
+            self.integral_part = self.umax / self.Kp - self.error - self.derivative_part
+            self.control_input = np.array(self.umax)
 
-        elif (control_input <= self.umin) and control_input * error <= 0:
-            self.integral_part = self.umin / self.Kp - error - self.derivative_part
-            control_input = np.array(self.umin)
+        elif (self.control_input <= self.umin) and self.control_input * self.error <= 0:
+            self.integral_part = self.umin / self.Kp - self.error - self.derivative_part
+            self.control_input = np.array(self.umin)
 
-        return control_input
+        return self.control_input
+
+    def change_param(self, Kp, Ti, Td):
+        self.Kp = Kp
+        self.Ti = Ti
+        self.Td = Td
+
+        self.integral_part = self.control_input / self.Kp - self.error - self.derivative_part
 
 
 class NMPC:

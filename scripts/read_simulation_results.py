@@ -19,14 +19,14 @@ Number_of_patient = 500
 phase = 'induction'
 
 np.random.seed(0)
-training_patient = np.random.randint(0, Number_of_patient, size=16)
+training_patient = np.random.randint(0, 500, size=16)
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
 
 title = 'PID'
 # title = 'MEKF_NMPC'
 # title = 'EKF_NMPC'
-title = 'MHE_NMPC'
+# title = 'MHE_NMPC'
 print(f"Reading {title} results")
 if title == 'PID':
     ts = 2
@@ -52,10 +52,14 @@ BIS_data = Data[[f"{i}_BIS" for i in range(Number_of_patient)]].to_numpy()
 BIS_data_training = Data[[f"{i}_BIS" for i in training_patient]].to_numpy()
 Time = np.arange(0, len(Data)) * ts / 60
 
-IAE = np.sum(np.abs(BIS_data[:, training_patient] - 50)**2 * ts, axis=0)
+IAE = np.sum(np.abs(BIS_data_training - 50)**2 * ts, axis=0)
 
 # create a metric which penalize two time more BIS under 50 that upside
-# IAE = np.sum((BIS_data[:, training_patient] - 50)*(1-3*((BIS_data[:, training_patient] - 50) < 0)) * ts, axis=0)
+IAE = np.sum((BIS_data_training - 50)**2*(1+((BIS_data_training - 50) < 0)) * ts, axis=0)
+IAE = []
+for i in range(len(training_patient)):
+    mask = BIS_data_training[:, i] > 50
+    IAE.append(np.sum((BIS_data_training[:, i] - 50)**2 * mask + (BIS_data_training[:, i] - 50)**4 * (~mask), axis=0))
 
 
 print(f"Training IAE : {np.max(IAE)}")
@@ -76,11 +80,12 @@ Ur_data = Data[[f"{i}_u_remi" for i in range(Number_of_patient)]].to_numpy()
 plt.subplot(2, 1, 2)
 plt.plot(Time, Up_data, linewidth=0.5, color='b', alpha=0.1)
 plt.plot(Time, Ur_data, linewidth=0.5, color='r', alpha=0.1)
-plt.plot(Time, np.nanmean(Up_data, axis=1), linewidth=1, color='b')
-plt.plot(Time, np.nanmean(Ur_data, axis=1), linewidth=1, color='r')
+plt.plot(Time, np.nanmean(Up_data, axis=1), linewidth=1, color='b', label='Propofol')
+plt.plot(Time, np.nanmean(Ur_data, axis=1), linewidth=1, color='r', label='Remifentanil')
 plt.ylabel('Inputs')
 plt.grid()
 plt.xlabel('Time (min)')
+plt.legend()
 plt.savefig('./Results_Images/BIS_' + title + '_n=' + str(Number_of_patient) + '.pdf')
 plt.show()
 
@@ -105,6 +110,10 @@ for i in tqdm(range(Number_of_patient)):  # Number_of_patient
         TTn_list.append(TTn)
         BIS_NADIRp_list.append(BIS_NADIRp)
         BIS_NADIRn_list.append(BIS_NADIRn)
+
+# percentage of patient with BIS value below 40
+print(
+    f"Percentage of patient with BIS value below 40 : {np.sum(np.nanmin(BIS_data, axis=0) < 40)/Number_of_patient*100}%")
 
 
 result_table = pd.DataFrame()

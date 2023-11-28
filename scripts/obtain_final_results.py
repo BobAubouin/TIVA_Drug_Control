@@ -32,16 +32,16 @@ image_folder_path = './Results_Images/'
 
 try:
     Table_PID = pd.read_csv(folder_path + 'result_table_PID_induction_500.csv')
-    Table_NMPC = pd.read_csv(folder_path + 'result_table_EKF_NMPC_induction_500.csv')
-    Table_MMPC = pd.read_csv(folder_path + 'result_table_MEKF_NMPC_induction_500.csv')
+    # Table_NMPC = pd.read_csv(folder_path + 'result_table_EKF_NMPC_induction_500.csv')
+    # Table_MMPC = pd.read_csv(folder_path + 'result_table_MEKF_NMPC_induction_500.csv')
     Table_MHEMPC = pd.read_csv(folder_path + 'result_table_MHE_NMPC_induction_500.csv')
 
     final_table = pd.DataFrame(columns=['Controller', 'TT_mean', 'TT_max', 'BIS_NADIR_mean', 'BIS_NADIR_min',
                                         'ST10_mean', 'ST10_max', 'ST20_mean', 'ST20_max', 'US_mean', 'US_max'])
 
-    final_table['Controller'] = ['PID', 'NMPC', 'MMPC', 'MHE_NMPC']
+    final_table['Controller'] = ['PID', 'MHE_NMPC']  # , 'NMPC', 'MMPC'
 
-    list_data = [Table_PID, Table_NMPC, Table_MMPC, Table_MHEMPC]
+    list_data = [Table_PID, Table_MHEMPC]  # , Table_NMPC, Table_MMPC
 
     final_table['TT_mean'] = [str(df['TT (min)'][0]) + "$\pm$" + str(df['TT (min)'][1]) for df in list_data]
     final_table['TT_max'] = [str(df['TT (min)'][3]) for df in list_data]
@@ -164,7 +164,7 @@ if bool_NMPC:
 if bool_MMPC:
     ax.plot(Time_MPC, BIS_MMPC, label='MMPC')
 if bool_MHEMPC:
-    ax.plot(Time_MPC, BIS_MHEMPC, label='MHE_NMPC')
+    ax.plot(Time_MPC, BIS_MHEMPC, label='MHE_NMPC', color=mcolors.TABLEAU_COLORS['tab:red'])
 ax.grid(linewidth=0.4)
 ax.legend(fontsize=13)
 
