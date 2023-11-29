@@ -100,7 +100,8 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
             disturbance = [0, 0, 0]
         else:
             disturbance = pas.compute_disturbances(i*ts, 'step', start_step=10*60, end_step=15*60)
-            if i*ts == 10*60 and control_type == 'PID':
+            # disturbance[0] = disturbance[0] * 1.5
+            if i*ts == 9*60 and control_type == 'PID':
                 controller.change_param(Kp=control_param[4], Ti=control_param[5], Td=control_param[6])
 
         bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=bool_noise, dist=disturbance)

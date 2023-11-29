@@ -124,14 +124,24 @@ param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 256 * np.diag([4, 1])]
 param_ekf = [Q_est, R_est, P0_est, 30, 30, 434 * np.diag([2, 1])]
 
 parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
-                  Q_mhe, R_mhe, N_mhe, theta, 120, 30, 30, 19 * np.diag([10, 1])]
+                  Q_mhe, R_mhe, N_mhe, theta, 120, 30, 30, 38 * np.diag([4, 1])]
 
+param_PID = [0.032, 738, 9, 2, 0.06, 400, 5]
 phase = 'total'
 control_type = 'MEKF-MHE-NMPC'
+if control_type == 'PID':
+    control_param = param_PID
+elif control_type == 'EKF-NMPC':
+    control_param = param_ekf
+elif control_type == 'MEKF-NMPC':
+    control_param = MEKF_param + [30, 30, 19 * np.diag([4, 1])]
+elif control_type == 'MHE-NMPC':
+    control_param = param_mhe
+elif control_type == 'MEKF-MHE-NMPC':
+    control_param = parem_mekf_mhe
+
 Patient_number = 47
 training_patient = np.random.randint(0, 500, size=3)
-
-param_PID = [0.032, 738, 9, 2, 0.06, 738, 9]
 
 
 def small_obj(i: int, param: list, output: str = 'IAE'):
@@ -144,7 +154,7 @@ def small_obj(i: int, param: list, output: str = 'IAE'):
 
     start = time.perf_counter()
     df_results = perform_simulation([age, height, weight, gender],
-                                    phase, control_type='PID',
+                                    phase, control_type=control_type,
                                     control_param=param, random_bool=[True, True])
     end = time.perf_counter()
     print(f" Time to perform {phase} phase : {end-start} s")
@@ -157,12 +167,12 @@ def small_obj(i: int, param: list, output: str = 'IAE'):
         return
 
 
-local_cost = partial(small_obj, param=param_PID, output='dataframe')
+local_cost = partial(small_obj, param=control_param, output='dataframe')
 
 start = time.perf_counter()
 # with mp.Pool(mp.cpu_count()-1) as p:
 #     r = list(p.map(local_cost, training_patient))
-df = small_obj(Patient_number, param=param_PID, output='dataframe')
+df = small_obj(Patient_number, param=control_param, output='dataframe')
 
 end = time.perf_counter()
 # df = r[0]
