@@ -10,7 +10,7 @@ from functools import partial
 # parameter of the simulation
 phase = 'total'
 control_type = 'PID'
-Patient_number = 100
+Patient_number = 500
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
@@ -43,9 +43,9 @@ if phase == 'total':
 
 def objective(trial):
 
-    K = trial.suggest_float('K', 1.e-3, 1)
-    Ti = trial.suggest_float('Ti', 100, 800)
-    Td = trial.suggest_float('Td', 0.1, 20)
+    K = trial.suggest_float('K', 5.e-4, 1)
+    Ti = trial.suggest_float('Ti', 100, 1500)
+    Td = trial.suggest_float('Td', 0.1, 25)
     ratio = 2
     if phase == 'induction':
         pid_param = [K, Ti, Td, ratio]
@@ -59,13 +59,16 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=500, show_progress_bar=True)
+# study.optimize(objective, n_trials=500, show_progress_bar=True)
 
 print(study.best_params)
 
-pid_param = [study.best_params['K'], study.best_params['Ti'], study.best_params['Td'], 2]
+if phase == 'induction':
+    pid_param = [study.best_params['K'], study.best_params['Ti'], study.best_params['Td'], 2]
+else:
+    pid_param = induction_param + [study.best_params['K'], study.best_params['Ti'], study.best_params['Td']]
 
 # %% test on all patient
 
