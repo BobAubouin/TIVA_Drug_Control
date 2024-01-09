@@ -6,7 +6,7 @@ import numpy as np
 from python_anesthesia_simulator import metrics
 
 N = 30
-R = 42 * np.diag([4, 1])
+R = 6 * np.diag([4, 1])
 t_switch = 120
 phase = 'induction'
 
@@ -29,11 +29,9 @@ for i in training_patient:
     print(f"Patient {counter}/{len(training_patient)} done")
 
 
-print(f"Training TT : {np.mean(TT_list)}")
+print(f"Training TT : {np.mean(TT_list)*60}")
 
 # plot all BIS
-rc('text', usetex=True)
-rc('font', family='serif')
 plt.figure(figsize=(8, 4))
 for i in range(len(df_list)):
     plt.plot(df_list[i]['Time'], df_list[i]['BIS'], label=f"Patient {i}")
@@ -41,4 +39,4 @@ plt.xlabel("Time (min)")
 plt.ylabel("BIS")
 # plt.legend()
 plt.grid()
-plt.show()
+plt.savefig(f"./Results_Images/MEKF_MHE_MPC_{phase}_training_manual_R={R[1,1]}.png", dpi=300)
