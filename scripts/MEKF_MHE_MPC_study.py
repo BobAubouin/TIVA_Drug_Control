@@ -19,6 +19,7 @@ cost_choice = 'TT'
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
+
 def compute_cost(df: pd.DataFrame, type: str) -> float:
     """Compute the cost of the simulation.
 
@@ -45,6 +46,7 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
                 break
         cost = (df['Time'].iloc[i] - 101)**2
     return cost
+
 
 def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     np.random.seed(i)
@@ -83,7 +85,7 @@ study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///R
 Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 0.00001])
 R_est = study_petri.best_params['R']
 P0_est = 1e-3 * np.eye(9)
-P0_est[8,8] = 1e-6
+P0_est[8, 8] = 1e-6
 lambda_1 = 1
 lambda_2 = study_petri.best_params['lambda_2']
 nu = 1.e-5
@@ -177,21 +179,15 @@ parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
                   Q_mhe, R_mhe, N_mhe, theta, 120]
 
 
-
-
-
-
-
-
 def objective(trial):
     N = 30
-    R = trial.suggest_float('R', 5, 100, log=True) * np.diag([4, 1]) # * np.diag([4, 1])
+    R = trial.suggest_float('R', 5, 100, log=True) * np.diag([4, 1])  # * np.diag([4, 1])
     Nu = N
     t_switch = trial.suggest_int('t_switch', 20, 240)
     parem_mekf_mhe[-1] = t_switch
     Qest_d = trial.suggest_float('theta_d', 1.e-6, 10, log=True)
     Qest = parem_mekf_mhe[0]
-    Qest[-1, -1] =  Qest_d
+    Qest[-1, -1] = Qest_d
     parem_mekf_mhe[0] = Qest
 
     mhe_nmpc_param = parem_mekf_mhe + [N, Nu, R]
@@ -201,74 +197,73 @@ def objective(trial):
     return np.mean(r)
 
 
-# %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MMMPC_induction_5",
-                            storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=50, show_progress_bar=True)
+if __name__ == '__main__':
+    # %% Tuning of the controler
+    study = optuna.create_study(direction='minimize', study_name=f"MMMPC_induction_5",
+                                storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
+    # study.optimize(objective, n_trials=50, show_progress_bar=True)
 
-print(study.best_params)
+    print(study.best_params)
 
-MPC_param = [30, 30, study.best_params['R'] * np.diag([4, 1])] #, 39, study.best_params['R'] 
-t_switch = study.best_params['t_switch']
-parem_mekf_mhe[-1] = t_switch
-Qest_d = study.best_params['theta_d']
-Qest = parem_mekf_mhe[0]
-Qest[-1, -1] =  Qest_d
-parem_mekf_mhe[0] = Qest
-mhe_nmpc_param = parem_mekf_mhe + MPC_param
+    MPC_param = [30, 30, study.best_params['R'] * np.diag([4, 1])]  # , 39, study.best_params['R']
+    t_switch = study.best_params['t_switch']
+    parem_mekf_mhe[-1] = t_switch
+    Qest_d = study.best_params['theta_d']
+    Qest = parem_mekf_mhe[0]
+    Qest[-1, -1] = Qest_d
+    parem_mekf_mhe[0] = Qest
+    mhe_nmpc_param = parem_mekf_mhe + MPC_param
 
-# %% test on all patient
-print("start simulation...")
-test_func = partial(small_obj, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
-patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
-print(patient_list)
-print(mp.cpu_count())
-with mp.Pool(mp.cpu_count()//2) as p:
-    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test MEKF_MHE'))
+    # %% test on all patient
+    print("start simulation...")
+    test_func = partial(small_obj, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
+    patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
+    print(patient_list)
+    print(mp.cpu_count())
+    with mp.Pool(mp.cpu_count()//2) as p:
+        res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test MEKF_MHE'))
 
-print("Saving results...")
-final_df = pd.DataFrame()
+    print("Saving results...")
+    final_df = pd.DataFrame()
 
-for i in range(len(res)):
+    for i in range(len(res)):
 
-    df = res[i][1]
-    patient_id = res[i][0]
-    df.rename(columns={'Time': f"{patient_id}_Time",
-                       'BIS': f"{patient_id}_BIS",
-                       "u_propo": f"{patient_id}_u_propo",
-                       "u_remi": f"{patient_id}_u_remi",
-                       "step_stime": f"{patient_id}_step_time"}, inplace=True)
+        df = res[i][1]
+        patient_id = res[i][0]
+        df.rename(columns={'Time': f"{patient_id}_Time",
+                           'BIS': f"{patient_id}_BIS",
+                           "u_propo": f"{patient_id}_u_propo",
+                           "u_remi": f"{patient_id}_u_remi",
+                           "step_stime": f"{patient_id}_step_time"}, inplace=True)
 
-    final_df = pd.concat((final_df, df), axis=1)
+        final_df = pd.concat((final_df, df), axis=1)
 
+    final_df.to_csv(f"./Results_data/MEKF_MHE_NMPC_{phase}_{Patient_number}.csv")
 
-final_df.to_csv(f"./Results_data/MEKF_MHE_NMPC_{phase}_{Patient_number}.csv")
+    print("Done!")
 
-print("Done!")
+    # %% plot the results
+    linewidth = 0.5
 
-# %% plot the results
-linewidth = 0.5
+    plt.figure()
+    plt.subplot(2, 1, 1)
+    plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('BIS')], 'b', linewidth=linewidth)
+    plt.ylabel('BIS')
+    plt.grid()
 
-plt.figure()
-plt.subplot(2, 1, 1)
-plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('BIS')], 'b', linewidth=linewidth)
-plt.ylabel('BIS')
-plt.grid()
+    plt.subplot(2, 1, 2)
+    plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u_remi')],
+             'b', linewidth=linewidth)
+    plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u_propo')],
+             'r', linewidth=linewidth)
 
-plt.subplot(2, 1, 2)
-plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u_remi')],
-         'b', linewidth=linewidth)
-plt.plot(final_df['0_Time']/60, final_df.loc[:, final_df.columns.str.endswith('u_propo')],
-         'r', linewidth=linewidth)
+    plt.plot([], [], 'r', linewidth=linewidth, label='propofol')
+    plt.plot([], [], 'b', linewidth=linewidth, label='remifentanil')
+    plt.ylabel('Drug rates')
+    plt.xlabel('Time(min)')
+    plt.legend()
+    plt.grid()
+    plt.savefig(f"./Results_Images/MEKF_MHE_NMPC_{phase}_{Patient_number}.png", dpi=300)
+    plt.show()
 
-plt.plot([], [], 'r', linewidth=linewidth, label='propofol')
-plt.plot([], [], 'b', linewidth=linewidth, label='remifentanil')
-plt.ylabel('Drug rates')
-plt.xlabel('Time(min)')
-plt.legend()
-plt.grid()
-plt.savefig(f"./Results_Images/MEKF_MHE_NMPC_{phase}_{Patient_number}.png", dpi=300)
-plt.show()
-
-
-print(f"mean computation time: {np.mean(final_df.loc[:, final_df.columns.str.endswith('step_time')])}s")
+    print(f"mean computation time: {np.mean(final_df.loc[:, final_df.columns.str.endswith('step_time')])}s")
