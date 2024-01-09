@@ -11,13 +11,40 @@ import python_anesthesia_simulator as pas
 
 # parameter of the simulation
 phase = 'induction'
-control_type = 'MEKF_NMPC'
+control_type = 'MHE_NMPC'
+cost_choice = 'IAE'
 Patient_number = 100
 
 
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
+def compute_cost(df: pd.DataFrame, type: str) -> float:
+    """Compute the cost of the simulation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        dataframe of the simulation.
+    type : str
+        type of the cost. can be 'IAE' or 'TT'.
+
+    Returns
+    -------
+    float
+        cost of the simulation.
+    """
+    if type == 'IAE':
+        cost = np.sum((df['BIS'] - 50)**2, axis=0)
+    elif type == 'IAE_biased':
+        mask = df['BIS'] > 50
+        cost = np.sum((df['BIS'] - 50)**3 * mask + (df['BIS'] - 50)**4 * (~mask), axis=0)
+    elif type == 'TT':
+        for i in range(len(df['BIS'])):
+            if df['BIS'].iloc[i] < 60:
+                break
+        cost = (df['Time'].iloc[i] - 101)**2
+    return cost
 
 def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     np.random.seed(i)
@@ -26,13 +53,14 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     height = np.random.randint(low=150, high=190)
     weight = np.random.randint(low=50, high=100)
     gender = np.random.randint(low=0, high=2)
-
+    print(i*0.1)
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MHE-NMPC',
                                     control_param=mhe_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum((df_results['BIS'] - 50)**2*(1+((df_results['BIS'] - 50) < 0)) * 2, axis=0)
-        return IAE
+        cost = compute_cost(df_results, cost_choice)
+        return cost
     elif output == 'dataframe':
+        print(i)
         return i, df_results
     else:
         return
@@ -54,7 +82,7 @@ MHE_param = [Q_mhe, R_mhe, N_mhe, theta]
 
 def objective(trial):
     N = 30
-    R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
+    R = trial.suggest_float('R', 10, 5.e3, log=True) * np.diag([4, 1])
     Nu = N
     theta_d = trial.suggest_float('theta_d', 1.e-4, 10, log=True)
     theta = MHE_param[3]
@@ -68,13 +96,13 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_{phase}_2",
+study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_induction_7",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
 study.optimize(objective, n_trials=50, show_progress_bar=True)
 
 print(study.best_params)
 
-MPC_param = [30, 30, study.best_params['R'] * np.diag([10, 1])]
+MPC_param = [30, 30,  study.best_params['R'] * np.diag([4, 1])] # , 42
 theta_d = study.best_params['theta_d']
 theta = MHE_param[3]
 theta[12] = gamma * theta_d
@@ -82,11 +110,13 @@ MHE_param[3] = theta
 mhe_nmpc_param = MHE_param + MPC_param
 
 # %% test on all patient
-
+print("start simulation...")
 test_func = partial(small_obj, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
 patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
+print(patient_list)
+print(mp.cpu_count())
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test MHE'))
+    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc=f"Test MHE {phase}"))
 
 print("Saving results...")
 final_df = pd.DataFrame()
