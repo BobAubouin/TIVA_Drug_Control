@@ -860,7 +860,7 @@ class MEKF_MHE:
                     self.MHE_estimator.nb_states*self.MHE_estimator.N_mhe, order='F')
                 self.MHE_estimator.y = list(self.bis)
                 self.MHE_estimator.u = self.u
-
+                self.MHE_estimator.time = self.time
                 self.change_flag = True
 
             x, Bis = self.MHE_estimator.one_step(u, measurement)
