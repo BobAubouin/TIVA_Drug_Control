@@ -8,12 +8,39 @@ import multiprocessing as mp
 from functools import partial
 
 # parameter of the simulation
-phase = 'total'
+phase = 'induction'
 control_type = 'PID'
-Patient_number = 500
+cost_choice = 'IAE'
+Patient_number = 100
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
 
+def compute_cost(df: pd.DataFrame, type: str) -> float:
+    """Compute the cost of the simulation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        dataframe of the simulation.
+    type : str
+        type of the cost. can be 'IAE' or 'TT'.
+
+    Returns
+    -------
+    float
+        cost of the simulation.
+    """
+    if type == 'IAE':
+        cost = np.sum((df['BIS'] - 50)**2, axis=0)
+    elif type == 'IAE_biased':
+        mask = df['BIS'] > 50
+        cost = np.sum((df['BIS'] - 50)**3 * mask + (df['BIS'] - 50)**4 * (~mask), axis=0)
+    elif type == 'TT':
+        for i in range(len(df['BIS'])):
+            if df['BIS'].iloc[i] < 60:
+                break
+        cost = (df['Time'].iloc[i] - 101)**2
+    return cost
 
 def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     np.random.seed(i)
@@ -26,9 +53,8 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='PID',
                                     control_param=pid_param, random_bool=[True, True])
     if output == 'IAE':
-        mask = df_results['BIS'] > 50
-        IAE = np.sum((df_results['BIS'] - 50)**3 * mask + (df_results['BIS'] - 50)**4 * (~mask), axis=0)
-        return IAE
+        cost = compute_cost(df_results, cost_choice)
+        return cost
     elif output == 'dataframe':
         return df_results
     else:
@@ -36,7 +62,7 @@ def small_obj(i: int, pid_param: list, output: str = 'IAE'):
 
 
 if phase == 'total':
-    study = optuna.create_study(direction='minimize', study_name=f"PID_induction_6",
+    study = optuna.create_study(direction='minimize', study_name=f"PID_induction_1_cost_{cost_choice}",
                                 storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
     induction_param = [study.best_params['K'], study.best_params['Ti'], study.best_params['Td'], 2]
 
@@ -59,7 +85,7 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_2",
+study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1_cost_{cost_choice}",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
 # study.optimize(objective, n_trials=500, show_progress_bar=True)
 
