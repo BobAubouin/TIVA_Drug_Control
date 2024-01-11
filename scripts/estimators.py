@@ -852,8 +852,9 @@ class MEKF_MHE:
         if self.time < self.switch_time:
             x, Bis = self.MEKF_estimator.one_step(u, measurement)
             self.X = np.concatenate((self.X[:, 1:], x.reshape(12, 1)), axis=1)
+            self.X[-3:, :] = np.repeat(self.X[-3:, -1], self.MHE_estimator.N_mhe).reshape(3, self.MHE_estimator.N_mhe)
             self.bis = np.concatenate((self.bis[1:], [measurement]))
-            self.u = np.concatenate((self.u[2:], np.array(u)))
+            self.u = np.concatenate((self.u[2:], u))
         else:
             if not self.change_flag:
                 self.MHE_estimator.x_pred = self.X.reshape(
