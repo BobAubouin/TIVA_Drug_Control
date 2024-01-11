@@ -55,14 +55,12 @@ def small_obj(i: int, mhe_nmpc_param: list, output: str = 'IAE'):
     height = np.random.randint(low=150, high=190)
     weight = np.random.randint(low=50, high=100)
     gender = np.random.randint(low=0, high=2)
-    print(i*0.1)
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MEKF-MHE-NMPC',
                                     control_param=mhe_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
         cost = compute_cost(df_results, cost_choice)
         return cost
     elif output == 'dataframe':
-        print(i)
         return i, df_results
     else:
         return
@@ -77,8 +75,8 @@ theta[12] = gamma*0.08
 theta[13] = 300
 theta[15] = 0.05
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R_mhe = 0.016  # study_mhe.best_params['R']
-N_mhe = 18  # study_mhe.best_params['N_mhe']
+R_mhe = 0.00023678046027518807  # study_mhe.best_params['R']
+N_mhe = 26  # study_mhe.best_params['N_mhe']
 MHE_param = [Q_mhe, R_mhe, N_mhe, theta]
 
 study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
@@ -176,7 +174,7 @@ for i, c50p in enumerate(c50p_list[1:-1]):
 
 
 parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
-                  Q_mhe, R_mhe, N_mhe, theta, 120]
+                  Q_mhe, R_mhe, N_mhe, theta, 180]
 
 
 def objective(trial):

@@ -1,10 +1,12 @@
 from matplotlib import rc
 import matplotlib.pyplot as plt
 from MEKF_MHE_MPC_study import small_obj
-from MEKF_MHE_MPC_study import MHE_param, parem_mekf_mhe, training_patient
+from MEKF_MHE_MPC_study import parem_mekf_mhe, training_patient
 import numpy as np
 from python_anesthesia_simulator import metrics
 import pandas as pd
+from tqdm import tqdm
+
 
 def compute_cost(df: pd.DataFrame, type: str) -> float:
     """Compute the cost of the simulation.
@@ -33,6 +35,7 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
         cost = (df['Time'].iloc[i] - 101)**2
     return cost
 
+
 N = 30
 R = 30 * np.diag([4, 1])
 t_switch = 180
@@ -47,7 +50,7 @@ TT_list = []
 cost_list = []
 IAE_list = []
 counter = 0
-for i in training_patient:
+for i in tqdm(*training_patient, total=len(training_patient), desc='Training'):
     _, df = small_obj(i, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
     Time = df['Time'].to_numpy()
     BIS = df['BIS'].to_numpy()
