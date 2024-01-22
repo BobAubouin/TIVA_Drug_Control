@@ -13,7 +13,7 @@ import python_anesthesia_simulator as pas
 phase = 'induction'
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE'
-Patient_number = 100
+Patient_number = 500
 
 
 np.random.seed(0)
@@ -100,11 +100,11 @@ if __name__ == '__main__':
     # %% Tuning of the controler
     study = optuna.create_study(direction='minimize', study_name=f"MHE_MPC_induction_7",
                                 storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-    study.optimize(objective, n_trials=50, show_progress_bar=True)
+    # study.optimize(objective, n_trials=50, show_progress_bar=True)
 
-    print(study.best_params)
+    # print(study.best_params)
 
-    MPC_param = [30, 30,  study.best_params['R'] * np.diag([4, 1])]  # , 42
+    MPC_param = [30, 30,  20 * np.diag([4, 1])]  # , 42
     theta_d = study.best_params['theta_d']
     theta = MHE_param[3]
     theta[12] = gamma * theta_d

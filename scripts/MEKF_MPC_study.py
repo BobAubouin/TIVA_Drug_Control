@@ -10,7 +10,7 @@ from functools import partial
 import python_anesthesia_simulator as pas
 
 # parameter of the simulation
-phase = 'induction'
+phase = 'total'
 control_type = 'MEKF_NMPC'
 Patient_number = 100
 
@@ -30,17 +30,18 @@ def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MEKF-NMPC',
                                     control_param=mekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
+        mask = df_results['BIS'] > 50
+        IAE = np.sum((df_results['BIS'] - 50)**2 * mask + (df_results['BIS'] - 50)**4 * (~mask), axis=0)
         return IAE
     elif output == 'dataframe':
-        return df_results
+        return i, df_results
     else:
         return
 
 
 # %% set observer parameters
 study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
-Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 1])
+Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 0.00039])
 R_est = study_petri.best_params['R']
 P0_est = 1e-3 * np.eye(9)
 lambda_1 = 1
@@ -51,7 +52,7 @@ design_param = [lambda_1, lambda_2, nu, epsilon]
 
 BIS_param_nominal = pas.BIS_model().hill_param
 
-model_bis = 'Aubouin'
+model_bis = 'Bouillon'
 
 if model_bis =='Bouillon':
     mean_c50p = 4.47
@@ -150,9 +151,9 @@ MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
 
 def objective(trial):
     N = 30
-    R = trial.suggest_float('R', 1, 100, log=True) * np.diag([10, 1])
+    R = trial.suggest_float('R', 100, 5.e3, log=True) * np.diag([4, 1])
     Nu = N
-    Q9 = trial.suggest_float('Q_9', 1.e-4, 10, log=True)
+    Q9 = trial.suggest_float('theta_d', 1.e-4, 1.e-1, log=True)
     Q_est = MEKF_param[0]
     Q_est[-1, -1] = Q9
     MEKF_param[0] = Q_est
@@ -164,35 +165,38 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_5",
-                            storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=100)
+# study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_5",
+                            # storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
+# study.optimize(objective, n_trials=60)
 
-print(study.best_params)
+# print(study.best_params)
 
-MPC_param = [study.best_params['N'], study.best_params['N'], study.best_params['R']* np.diag([10, 1])]
-Q9 = study.best_params['Q_9']
-Q_est = MEKF_param[0]
-Q_est[-1, -1] = Q9
-MEKF_param[0] = Q_est
+MPC_param = [30, 30, 39.8965328* np.diag([4, 1])]
+# Q9 = 0.0039
+# Q_est = MEKF_param[0]
+# Q_est[-1, -1] = Q9
+# MEKF_param[0] = Q_est
 mekf_nmpc_param = MEKF_param + MPC_param
 
 # %% test on all patient
-
 test_func = partial(small_obj, mekf_nmpc_param=mekf_nmpc_param, output='dataframe')
+patient_list = [i for i in range(Patient_number)]+training_patient.tolist()
+
 
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, range(Patient_number)), total=Patient_number, desc='Test MEKF MPC'))
+    res = list(tqdm(p.map(test_func, patient_list), total=len(patient_list), desc='Test MEKF'))
 
 print("Saving results...")
 final_df = pd.DataFrame()
 
-for i, df in enumerate(res):
-    df.rename(columns={'Time': f"{i}_Time",
-                       'BIS': f"{i}_BIS",
-                       "u_propo": f"{i}_u_propo",
-                       "u_remi": f"{i}_u_remi",
-                       "step_stime": f"{i}_step_time"}, inplace=True)
+for i in range(len(res)):
+    df = res[i][1]
+    patient_id = res[i][0]
+    df.rename(columns={'Time': f"{patient_id}_Time",
+                       'BIS': f"{patient_id}_BIS",
+                       "u_propo": f"{patient_id}_u_propo",
+                       "u_remi": f"{patient_id}_u_remi",
+                       "step_stime": f"{patient_id}_step_time"}, inplace=True)
 
     final_df = pd.concat((final_df, df), axis=1)
 

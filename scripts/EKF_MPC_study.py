@@ -30,7 +30,9 @@ def small_obj(i: int, ekf_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='EKF-NMPC',
                                     control_param=ekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)**2*2)
+        # IAE = np.sum((df_results['BIS'].loc[2*60//2:4*60//2] - 50)**2*(1+((df_results['BIS'].loc[2*60//2:4*60//2] - 50) < 0)) * 2, axis=0)
+        mask = df_results['BIS'] > 50
+        IAE = np.sum((df_results['BIS'] - 50)**2 * mask + (df_results['BIS'] - 50)**4 * (~mask), axis=0)
         return IAE
     elif output == 'dataframe':
         return df_results
@@ -49,9 +51,9 @@ EKF_param = [Q_est, R_est, P0_est]
 
 def objective(trial):
     N = 30
-    R = trial.suggest_float('R', 0.1, 100, log=True) * np.diag([10, 1])
+    R = trial.suggest_float('R', 100, 5.e3, log=True) * np.diag([2, 1])
     Nu = N
-    Q9 = trial.suggest_float('Q_9', 1.e-1, 100, log=True)
+    Q9 = trial.suggest_float('Q_9', 1.e-3, 1.e-1, log=True)
     Q_est = EKF_param[0]
     Q_est[-1, -1] = Q9
     EKF_param[0] = Q_est
@@ -63,13 +65,15 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-study = optuna.create_study(direction='minimize', study_name=f"EKF_MPC_{phase}_1",
+# search_space = {'R': np.logspace(-1,2,10), 'Q_9': np.logspace(-1,2,3)}
+study = optuna.create_study(direction='minimize', study_name=f"EKF_MPC_{phase}_7",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-study.optimize(objective, n_trials=100, show_progress_bar=True)
+                            # sampler=optuna.samplers.GridSampler(search_space))
+study.optimize(objective, n_trials=60, show_progress_bar=True)
 
 print(study.best_params)
 
-MPC_param = [30, 30, study.best_params['R'] * np.diag([10, 1])]
+MPC_param = [30, 30, study.best_params['R'] * np.diag([4, 1])]
 Q9 = study.best_params['Q_9']
 Q_est = EKF_param[0]
 Q_est[-1, -1] = Q9
