@@ -109,6 +109,7 @@ param = MEKF_param + [30, 30, 19 * np.diag([16, 1])]
 
 
 study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
+print(study_mhe.best_params)
 gamma = 0.105  # study_mhe.best_params['eta']
 theta = [gamma, 800, 100, 0.005]*4
 theta[4] = gamma/100
@@ -117,17 +118,17 @@ theta[13] = 300
 theta[15] = 0.05
 
 Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R_mhe = 0.016  # study_mhe.best_params['R']
-N_mhe = 18  # study_mhe.best_params['N_mhe']
+R_mhe = study_mhe.best_params['R']
+N_mhe = study_mhe.best_params['N_mhe']
 param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 256 * np.diag([4, 1])]
 
-param_ekf = [Q_est, R_est, P0_est, 30, 30, 434 * np.diag([2, 1])]
+param_ekf = [Q_est, R_est, P0_est, 30, 30, 434 * np.diag([4, 1])]
 
 parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
-                  Q_mhe, R_mhe, N_mhe, theta, 120, 30, 30, 38 * np.diag([4, 1])]
+                  Q_mhe, R_mhe, N_mhe, theta, 180, 30, 30, 38 * np.diag([4, 1])]
 
 param_PID = [0.032, 738, 9, 2, 0.06, 400, 5]
-phase = 'total'
+phase = 'induction'
 control_type = 'MEKF-MHE-NMPC'
 if control_type == 'PID':
     control_param = param_PID
@@ -140,7 +141,7 @@ elif control_type == 'MHE-NMPC':
 elif control_type == 'MEKF-MHE-NMPC':
     control_param = parem_mekf_mhe
 
-Patient_number = 47
+Patient_number = 171
 training_patient = np.random.randint(0, 500, size=3)
 
 
@@ -155,7 +156,7 @@ def small_obj(i: int, param: list, output: str = 'IAE'):
     start = time.perf_counter()
     df_results = perform_simulation([age, height, weight, gender],
                                     phase, control_type=control_type,
-                                    control_param=param, random_bool=[True, True])
+                                    control_param=param, random_bool=[False, True])
     end = time.perf_counter()
     print(f" Time to perform {phase} phase : {end-start} s")
     if output == 'IAE':
@@ -188,8 +189,10 @@ plt.title(f"{control_type} control")
 plt.show()
 
 plt.figure()
-plt.plot(df['Time'], df['u_propo'], label='Propofol')
-plt.plot(df['Time'], df['u_remi'], label='Remifentanil')
+plt.plot(df['Time'], df['u_propo'], label='Propofol', color='b')
+plt.plot(df['Time'], df['u_propo_target'], 'b--', label='target')
+plt.plot(df['Time'], df['u_remi'], label='Remifentanil', color='r')
+plt.plot(df['Time'], df['u_remi_target'], 'r--', label='target')
 plt.grid()
 plt.xlabel('Time [s]')
 plt.ylabel('Drug rate')

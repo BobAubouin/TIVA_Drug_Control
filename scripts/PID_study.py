@@ -8,12 +8,13 @@ import multiprocessing as mp
 from functools import partial
 
 # parameter of the simulation
-phase = 'induction'
+phase = 'total'
 control_type = 'PID'
 cost_choice = 'IAE'
-Patient_number = 100
+Patient_number = 500
 np.random.seed(0)
 training_patient = np.random.randint(0, 500, size=16)
+
 
 def compute_cost(df: pd.DataFrame, type: str) -> float:
     """Compute the cost of the simulation.
@@ -41,6 +42,7 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
                 break
         cost = (df['Time'].iloc[i] - 101)**2
     return cost
+
 
 def small_obj(i: int, pid_param: list, output: str = 'IAE'):
     np.random.seed(i)
@@ -87,7 +89,7 @@ def objective(trial):
 # %% Tuning of the controler
 study = optuna.create_study(direction='minimize', study_name=f"PID_{phase}_1_cost_{cost_choice}",
                             storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=500, show_progress_bar=True)
+study.optimize(objective, n_trials=500, show_progress_bar=True)
 
 print(study.best_params)
 

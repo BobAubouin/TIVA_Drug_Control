@@ -50,7 +50,7 @@ TT_list = []
 cost_list = []
 IAE_list = []
 counter = 0
-for i in tqdm(*training_patient, total=len(training_patient), desc='Training'):
+for i in tqdm(training_patient, total=len(training_patient), desc='Training'):
     _, df = small_obj(i, mhe_nmpc_param=mhe_nmpc_param, output='dataframe')
     Time = df['Time'].to_numpy()
     BIS = df['BIS'].to_numpy()

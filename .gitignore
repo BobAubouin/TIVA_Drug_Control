@@ -8,4 +8,16 @@ BIS_parameters.csv
 
 Patient_table.csv
 
+# python venv
+
 .env/
+
+# OAR files
+
+OAR*
+
+# bash scripts
+
+*.sh
+
+astuce.py

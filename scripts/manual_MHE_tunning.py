@@ -7,7 +7,7 @@ import numpy as np
 from python_anesthesia_simulator import metrics
 
 N = 30
-R = 42 * np.diag([4, 1])
+R = 20 * np.diag([4, 1])
 phase = 'induction'
 
 MPC_param = [N, N, R]
@@ -28,7 +28,7 @@ for i in training_patient:
     print(f"Patient {counter}/{len(training_patient)} done")
 
 
-print(f"Training TT : {np.mean(TT_list)}")
+print(f"Training TT : {np.mean(TT_list)*60}")
 
 # plot all BIS
 rc('text', usetex=True)
