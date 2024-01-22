@@ -633,12 +633,12 @@ class MHE_integrator:
         xpred = cas.MX(Ad) @ x + cas.MX(Bd) @ u
         self.Pred = cas.Function('Pred', [x, u], [xpred], ['x', 'u'], ['xpred'])
 
-        up = x[3] / x[8]
-        ur = x[7] / x[9]
+        up = x[3] / x[9]
+        ur = x[7] / x[10]
         Phi = up/(up + ur + 1e-6)
         U_50 = 1 - beta * (Phi - Phi**2)
         i = (up + ur)/U_50
-        y = E0 - Emax * i ** x[10] / (1 + i ** x[10]) + x[11]
+        y = E0 - Emax * i ** x[11] / (1 + i ** x[11]) + x[8]
         self.output = cas.Function('output', [x], [y], ['x'], ['bis'])
 
         # ----- optimization problem -----
@@ -656,7 +656,7 @@ class MHE_integrator:
         Q10 = theta[8] + theta[9]*np.exp(-theta[10]*np.exp(-theta[11]*time))
         Q11 = theta[12] + theta[13]*(1-np.exp(-theta[14]*np.exp(-theta[15]*time)))
         Q = cas.blockcat([[self.Q, cas.MX(np.zeros((8, 4)))],
-                          [cas.MX(np.zeros((4, 8))), cas.diag(cas.vertcat(Q8, Q9, Q10, Q11))]])
+                          [cas.MX(np.zeros((4, 8))), cas.diag(cas.vertcat(Q11, Q8, Q9, Q10))]])
 
         J = (y[0] - self.output(x_bar[:self.nb_states]))**2 * self.R
         g = []
@@ -789,8 +789,7 @@ class MHE_integrator:
             plt.show()
         self.x_pred = np.array(res['x']).reshape(self.nb_states*self.N_mhe)
         bis = float(self.output(x=self.x[:, [-1]])['bis'])
-        x_return = np.concatenate([self.x[:8, -1], self.x[[11], -1], self.x[8:11, -1]])
-        return x_return, bis
+        return self.x[:, -1], bis
 
 
 class MEKF_MHE:
