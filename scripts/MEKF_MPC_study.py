@@ -12,12 +12,39 @@ import python_anesthesia_simulator as pas
 # parameter of the simulation
 phase = 'total'
 control_type = 'MEKF_NMPC'
-Patient_number = 100
+cost_choice = 'IAE'
+Patient_number = 500
 
 
-np.random.seed(0)
+np.random.seed(3)
 training_patient = np.random.randint(0, 500, size=16)
 
+def compute_cost(df: pd.DataFrame, type: str) -> float:
+    """Compute the cost of the simulation.
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        dataframe of the simulation.
+    type : str
+        type of the cost. can be 'IAE' or 'TT'.
+
+    Returns
+    -------
+    float
+        cost of the simulation.
+    """
+    if type == 'IAE':
+        cost = np.sum((df['BIS'] - 50)**2, axis=0)
+    elif type == 'IAE_biased':
+        mask = df['BIS'] > 50
+        cost = np.sum((df['BIS'] - 50)**3 * mask + (df['BIS'] - 50)**4 * (~mask), axis=0)
+    elif type == 'TT':
+        for i in range(len(df['BIS'])):
+            if df['BIS'].iloc[i] < 60:
+                break
+        cost = (df['Time'].iloc[i] - 101)**2
+    return cost
 
 def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
     np.random.seed(i)
@@ -30,45 +57,23 @@ def small_obj(i: int, mekf_nmpc_param: list, output: str = 'IAE'):
     df_results = perform_simulation([age, height, weight, gender], phase, control_type='MEKF-NMPC',
                                     control_param=mekf_nmpc_param, random_bool=[True, True])
     if output == 'IAE':
-        mask = df_results['BIS'] > 50
-        IAE = np.sum((df_results['BIS'] - 50)**2 * mask + (df_results['BIS'] - 50)**4 * (~mask), axis=0)
-        return IAE
+        cost = compute_cost(df_results, cost_choice)
+        return cost
     elif output == 'dataframe':
         return i, df_results
     else:
         return
 
+# %% MEKF parameters
+    
+mean_c50p = 4.47
+mean_c50r = 19.3
+mean_gamma = 1.13
+cv_c50p = 0.182
+cv_c50r = 0.888
+cv_gamma = 0.304
 
-# %% set observer parameters
-study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
-Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 0.00039])
-R_est = study_petri.best_params['R']
-P0_est = 1e-3 * np.eye(9)
-lambda_1 = 1
-lambda_2 = study_petri.best_params['lambda_2']
-nu = 1.e-5
-epsilon = study_petri.best_params['epsilon']
-design_param = [lambda_1, lambda_2, nu, epsilon]
-
-BIS_param_nominal = pas.BIS_model().hill_param
-
-model_bis = 'Bouillon'
-
-if model_bis =='Bouillon':
-    mean_c50p = 4.47
-    mean_c50r = 19.3
-    mean_gamma = 1.13
-    cv_c50p = 0.182
-    cv_c50r = 0.888
-    cv_gamma = 0.304
-elif model_bis == 'Aubouin':
-    mean_c50p = 4.42
-    mean_c50r = 33.4
-    mean_gamma = 1.73
-    cv_c50p = 0.36
-    cv_c50r = 0.11
-    cv_gamma = 0.60 
-
+BIS_param_nominal = [mean_c50p, mean_c50r, mean_gamma, 0, 97.4, 97.4]
 
 
 # estimation of log normal standard deviation
@@ -76,9 +81,26 @@ w_c50p = np.sqrt(np.log(1+cv_c50p**2))
 w_c50r = np.sqrt(np.log(1+cv_c50r**2))
 w_gamma = np.sqrt(np.log(1+cv_gamma**2))
 
-c50p_list = BIS_param_nominal[0]*np.exp([-2*w_c50p, -w_c50p, -0.5*w_c50p, 0, w_c50p])  # , -w_c50p
-c50r_list = BIS_param_nominal[1]*np.exp([-2*w_c50r, -w_c50r, -0.5*w_c50r, 0, w_c50r])
-gamma_list = BIS_param_nominal[2]*np.exp([-2*w_gamma, -w_gamma, -0.5*w_gamma, 0, w_gamma])  #
+c50p_normal = scipy.stats.lognorm(scale=mean_c50p, s=w_c50p)
+c50r_normal = scipy.stats.lognorm(scale=mean_c50r, s=w_c50r)
+gamma_normal = scipy.stats.lognorm(scale=mean_gamma, s=w_gamma)
+
+nb_points = 5
+points = np.linspace(0, 1, nb_points+1)
+points = [np.mean([points[i], points[i+1]]) for i in range(nb_points)]
+
+c50p_list = c50p_normal.ppf(points)
+
+nb_points = 6
+points = np.linspace(0, 1, nb_points+1)
+points = [np.mean([points[i], points[i+1]]) for i in range(nb_points)]
+
+c50r_list = c50r_normal.ppf(points)
+gamma_list = gamma_normal.ppf(points)
+
+# c50p_list = BIS_param_nominal[0]*np.exp([-2.2*w_c50p, -w_c50p, -0.4*w_c50p, 0, w_c50p])  # , -w_c50p
+# c50r_list = BIS_param_nominal[1]*np.exp([-2.2*w_c50r, -w_c50r, -0.4*w_c50r, 0, 0.6*w_c50r, w_c50r])
+# gamma_list = BIS_param_nominal[2]*np.exp([-2.2*w_gamma, -w_gamma, -0.4*w_gamma, 0, 0.8*w_gamma, 1.5*w_gamma])  #
 # surrender list by Inf value
 c50p_list = np.concatenate(([-np.Inf], c50p_list, [np.Inf]))
 c50r_list = np.concatenate(([-np.Inf], c50r_list, [np.Inf]))
@@ -105,19 +127,11 @@ def get_probability(c50p_set: list, c50r_set: list, gamma_set: list, method: str
         propability of the parameter set.
     """
     if method == 'proportional':
-        # cv_c50p = 0.182
-        # cv_c50r = 0.888
-        # cv_gamma = 0.304
-        w_c50p = np.sqrt(np.log(1+cv_c50p**2))
-        w_c50r = np.sqrt(np.log(1+cv_c50r**2))
-        w_gamma = np.sqrt(np.log(1+cv_gamma**2))
-        c50p_normal = scipy.stats.lognorm(scale=mean_c50p, s=w_c50p)
+
         proba_c50p = c50p_normal.cdf(c50p_set[1]) - c50p_normal.cdf(c50p_set[0])
 
-        c50r_normal = scipy.stats.lognorm(scale=mean_c50r, s=w_c50r)
         proba_c50r = c50r_normal.cdf(c50r_set[1]) - c50r_normal.cdf(c50r_set[0])
 
-        gamma_normal = scipy.stats.lognorm(scale=mean_gamma, s=w_gamma)
         proba_gamma = gamma_normal.cdf(gamma_set[1]) - gamma_normal.cdf(gamma_set[0])
 
         proba = proba_c50p * proba_c50r * proba_gamma
@@ -126,28 +140,42 @@ def get_probability(c50p_set: list, c50r_set: list, gamma_set: list, method: str
     return proba
 
 
-grid_vector = []
-eta0 = []
-proba = []
-alpha = 10
-for i, c50p in enumerate(c50p_list[1:-1]):
-    for j, c50r in enumerate(c50r_list[1:-1]):
-        for k, gamma in enumerate(gamma_list[1:-1]):
-            grid_vector.append([c50p, c50r, gamma]+BIS_param_nominal[3:])
-            c50p_set = [np.mean([c50p_list[i], c50p]),
-                        np.mean([c50p_list[i+2], c50p])]
+def init_proba(alpha):
+    grid_vector = []
+    eta0 = []
+    for i, c50p in enumerate(c50p_list[1:-1]):
+        for j, c50r in enumerate(c50r_list[1:-1]):
+            for k, gamma in enumerate(gamma_list[1:-1]):
+                grid_vector.append([c50p, c50r, gamma]+BIS_param_nominal[3:])
+                c50p_set = [np.mean([c50p_list[i], c50p]),
+                            np.mean([c50p_list[i+2], c50p])]
 
-            c50r_set = [np.mean([c50r_list[j], c50r]),
-                        np.mean([c50r_list[j+2], c50r])]
+                c50r_set = [np.mean([c50r_list[j], c50r]),
+                            np.mean([c50r_list[j+2], c50r])]
 
-            gamma_set = [np.mean([gamma_list[k], gamma]),
-                         np.mean([gamma_list[k+2], gamma])]
+                gamma_set = [np.mean([gamma_list[k], gamma]),
+                             np.mean([gamma_list[k+2], gamma])]
 
-            eta0.append(alpha*(1-get_probability(c50p_set, c50r_set, gamma_set, 'proportional')))
+                eta0.append(alpha*(1-get_probability(c50p_set, c50r_set, gamma_set, 'proportional')))
+    i_nom = np.argmin(np.sum(np.abs(np.array(grid_vector)-np.array(BIS_param_nominal))), axis=0)
+    eta0[i_nom] = alpha
+    return grid_vector, eta0
 
+study_petri = optuna.load_study(study_name="petri_final", storage="sqlite:///Results_data/mekf.db")
 
-MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
+P0 = 1e-3 * np.eye(9)
+Q = study_petri.best_params['Q']
+Q_mat = Q * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 1])  
+R = study_petri.best_params['R']
+alpha = study_petri.best_params['alpha']
+grid_vector, eta0 = init_proba(alpha)
+lambda_1 = 1
+lambda_2 = study_petri.best_params['lambda_2']
+nu = 1.e-5
+epsilon = study_petri.best_params['epsilon']
 
+design_param = [lambda_1, lambda_2, nu, epsilon]
+MEKF_param = [Q_mat, R, P0, grid_vector, eta0, design_param]
 
 def objective(trial):
     N = 30
@@ -165,17 +193,17 @@ def objective(trial):
 
 
 # %% Tuning of the controler
-# study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_5",
-                            # storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
-# study.optimize(objective, n_trials=60)
+study = optuna.create_study(direction='minimize', study_name=f"MEKF_MPC_{phase}_cost_{cost_choice}_1",
+                            storage='sqlite:///Results_data/tuning.db', load_if_exists=True)
+study.optimize(objective, n_trials=60)
 
-# print(study.best_params)
+print(study.best_params)
 
-MPC_param = [30, 30, 39.8965328* np.diag([4, 1])]
-# Q9 = 0.0039
-# Q_est = MEKF_param[0]
-# Q_est[-1, -1] = Q9
-# MEKF_param[0] = Q_est
+MPC_param = [30, 30, study.best_params['R']* np.diag([4, 1])]
+Q9 = study.best_params['R']
+Q_est = MEKF_param[0]
+Q_est[-1, -1] = Q9
+MEKF_param[0] = Q_est
 mekf_nmpc_param = MEKF_param + MPC_param
 
 # %% test on all patient

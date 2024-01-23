@@ -1,5 +1,6 @@
 """Created on Mon Apr 25 14:36:09 2022   @author: aubouinb."""
 
+import copy
 import numpy as np
 import casadi as cas
 import control as ctrl
@@ -307,7 +308,7 @@ class MEKF:
         self.grid_vector = grid_vector
         if eta0 is None:
             self.eta = np.ones((len(self.EKF_list), 1))
-        self.eta = eta0
+        self.eta = copy.deepcopy(eta0)
         self.best_index = np.argmin(eta0)
 
         # define the design parameters
