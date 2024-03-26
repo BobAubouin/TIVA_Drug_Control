@@ -1,11 +1,11 @@
 # TIVA_Drug_Control
 
-Git depository associated to the paper "Automated Multi-Drugs Administration During Total Intravenous Anesthesia Using Multi-Model Predictive Control".
+Git depository associated to the paper "PID and Model Predictive Control Approach for Drug Dosage in Anesthesia During Induction: a Comparative Study".
 
 Use the [Python Anesthesia Simulator](https://github.com/BobAubouin/Python_Anesthesia_Simulator) to run the simulation and compute the performances metrics.
 
 **Abstract:**
-In this paper, a multi-model predictive control approach is used to automate the co-administration of Propofol and Remifentanil from BIS measurement during general anesthesia. To handle the parameter uncertainties in the non-linear output function, multiple Extended Kalman Filters are used to estimate the state of the system in parallel. The best model is chosen using a model-matching criterion and used in a non-linear MPC to compute the next drug rates. The method is compared with a conventional non-linear MPC approach and a PID from the literature. The robustness of the controller is tested using Monte-Carlo simulations on a wide population introducing uncertainties in the models. Both simulation setup and controller codes are accessible in open source for further use. Our preliminary results show an interest in a multi-model method to handle parameter uncertainties.
+In this paper, a PID controller is compared to an extended moving horizon estimator coupled with a model predictive control approach for the problem of dosing propofol and remifentanil during the induction of anesthesia. For the PID controller, taken from the literature, a fixed ratio is considered between propofol and remifentanil flow rates and an anti-windup strategy is used to prevent integration wind-up. The optimal control approach uses an MHE to estimate both the states and the pharmacodynamic parameters of the system, followed by a non-linear model predictive controller to compute the optimal drug rates according to the model. Both controllers are tuned using the same criterion, and are compared by simulating 500 uncertain patient models for the induction phase. 
 
 
 # Installation
