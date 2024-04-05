@@ -150,15 +150,16 @@ def load_mekf_param(point_number: list[int],
 
 
 def load_mhe_param(vmax: float,
+                   vmin: float,
                    R: float,
                    N_mhe: int,
                    q: float):
     Q = np.diag([1, 550, 550, 1, 1, 50, 750, 1]+[1e3]*4)*q
     P = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-    theta = [1, vmax, 100, 0.02]*4
+
+    theta = [vmin, vmax, 100, 0.02]*4
     theta[12] = vmax
-    theta[13] = -vmax
-    theta[15] = 0.02
+    theta[13] = -vmax+vmin
     MHE_std = {
         'R': R,
         'Q': Q,

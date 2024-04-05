@@ -16,7 +16,8 @@ def perform_simulation(Patient_info: list,
                        control_param: dict,
                        estim_param: dict,
                        random_bool: list,
-                       sampling_time: float = 2
+                       sampling_time: float = 2,
+                       bool_noise: bool = True,
                        ) -> pd.DataFrame:
     """Run the simulation of the closed loop anesthesia system.
 
@@ -47,6 +48,8 @@ def perform_simulation(Patient_info: list,
         list of len 2, first index to add uncertainty in the PK model and second index to add uncertainty in the PD model.
     sampling_time : float, optional
         sampling time of the simulation. The default is 2.
+    bool_noise : bool, optional
+        add noise to the simulation. The default is True.
 
     Returns
     -------
@@ -138,10 +141,8 @@ def perform_simulation(Patient_info: list,
     u_propo, u_remi = 0, 0
     if phase == 'induction':
         N_simu = 10*60//sampling_time
-        bool_noise = True
     else:
         N_simu = 20*60//sampling_time
-        bool_noise = True
 
     for i in range(N_simu):
         if phase == 'induction':

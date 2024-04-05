@@ -49,7 +49,7 @@ mekf_param = load_mekf_param([5, 6, 6],
                              lambda_2=1e-2,
                              epsilon=0.8)
 
-mhe_param = load_mhe_param(R=0.1, N_mhe=30, vmax=1e4, q=1e3)
+mhe_param = load_mhe_param(R=0.1, N_mhe=30, vmax=1e4, q=1e3, vmin=0.1)
 
 age = 27
 height = 165
@@ -64,8 +64,9 @@ with suppress_stdout_stderr():
                                  'MHE_NMPC',
                                  NMPC_param,
                                  mhe_param,
-                                 [False, True],
-                                 2)
+                                 [True, True],
+                                 2,
+                                 bool_noise=False)
 
 print(f"Simulation time: {time.time() - start_time:.2f} s")
 # # plot results

@@ -19,14 +19,15 @@ from create_param import load_mhe_param
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased'
 phase = 'induction'
-study_name = 'MHE_NMPC_0'
+study_name = 'MHE_NMPC_1'
 patient_number = 500
 
 
 def study_mhe(trial):
     R_mhe = trial.suggest_float('R', 1e-5, 1e-1, log=True)
     N_mhe = trial.suggest_int('N_mhe', 20, 30)
-    vmax = trial.suggest_float('vmax', 1, 1e4, log=True)
+    vmax = 1e4
+    vmin = 0.1
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
     q = trial.suggest_float('q', 1e2, 1e6, log=True)
@@ -37,6 +38,7 @@ def study_mhe(trial):
 
     estim_param = load_mhe_param(
         vmax=vmax,
+        vmin=vmin,
         R=R_mhe,
         N_mhe=N_mhe,
         q=q)
