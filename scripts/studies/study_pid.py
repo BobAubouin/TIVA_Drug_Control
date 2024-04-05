@@ -15,7 +15,7 @@ from close_loop_anesth.experiments import random_simu, training_patient
 control_type = 'PID'
 cost_choice = 'IAE_biased'
 phase = 'total'
-study_name = 'PID_0'
+study_name = 'PID_1'
 patient_number = 500
 
 
@@ -43,13 +43,13 @@ def study_pid(trial):
 
     with mp.Pool(mp.cpu_count()-1) as p:
         r = list(p.map(local_cost, training_patient))
-    return max(r)
+    return np.mean(r)
 
 
 # create the optuna study
 study = optuna.create_study(direction='minimize', study_name=study_name,
                             storage='sqlite:///data/optuna/tuning.db', load_if_exists=True)
-# study.optimize(study_pid, n_trials=500, show_progress_bar=True)
+study.optimize(study_pid, n_trials=500, show_progress_bar=True)
 
 print(study.best_params)
 

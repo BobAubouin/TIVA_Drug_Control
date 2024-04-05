@@ -1,9 +1,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-import sys
 import os
-import contextlib
+
 
 from close_loop_anesth.loop import perform_simulation
 from create_param import load_mekf_param, load_mhe_param

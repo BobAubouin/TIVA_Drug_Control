@@ -75,7 +75,6 @@ def random_simu(caseid: int,
                 phase: str = 'induction',
                 cost_choice: str = 'cost'):
     np.random.seed(caseid)
-    print(caseid)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
     height = np.random.randint(low=150, high=190)

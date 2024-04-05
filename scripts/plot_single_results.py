@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # study to load
-study_name = 'PID_0'
+study_name = 'PID_1'
 
 # load the study
 with open(f'data/logs/{study_name}.json', 'r') as f:
@@ -15,7 +15,7 @@ with open(f'data/logs/{study_name}.json', 'r') as f:
 print(dict)
 
 # load the results
-filename = f'data/results/{dict["filename"]}.csv'
+filename = f'data/signals/{dict["filename"]}.csv'
 results = pd.read_csv(filename)
 
 # plot the results
