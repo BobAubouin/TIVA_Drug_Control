@@ -44,7 +44,7 @@ def derivated_of_f(x: list, bis_param: list) -> list:
     Parameters
     ----------
     x : list
-        State vector [xep, xer].
+        State vector.
     bis_param : list
         Parameters of the non-linear function BIS_param = [C50p, C50r, gamma, beta, E0, Emax].
 
@@ -84,7 +84,7 @@ def derivated_of_f(x: list, bis_param: list) -> list:
 
     dBIS_dxep = -Emax*gamma*I**(gamma-1)*dI_dxep/(1+I**gamma)**2
     dBIS_dxer = -Emax*gamma*I**(gamma-1)*dI_dxer/(1+I**gamma)**2
-    df = cas.hcat([0, 0, 0, dBIS_dxep, 0, 0, 0, dBIS_dxer, 1])
+    df = np.array([[0, 0, 0, dBIS_dxep[0], 0, 0, 0, dBIS_dxer[0], 1]])
 
     # if len(x) == 11:
     #     dup_dc50p = -x[3]/C50p**2
@@ -173,58 +173,68 @@ class EKF_integrator_new:
         self.Ad, self.Bd = discretize(A, B, ts)
         self.ts = ts
         self.BIS_param = BIS_param
-        C50p = BIS_param[0]
-        C50r = BIS_param[1]
-        gamma = BIS_param[2]
-        beta = BIS_param[3]
-        E0 = BIS_param[4]
-        Emax = BIS_param[5]
+        C50p, C50r, gamma, beta, E0, Emax = BIS_param
 
         self.R = R
         self.Q = Q
         self.P = P0
 
-        # declare CASADI variables
-        x = cas.MX.sym('x', 9)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
-        y = cas.MX.sym('y')  # BIS [%]
-        prop = cas.MX.sym('prop')   # Propofol infusion rate [mg/ml/min]
-        rem = cas.MX.sym('rem')   # Remifentanil infusion rate [mg/ml/min]
-        u = cas.vertcat(prop, rem)
-        P = cas.MX.sym('P', 9, 9)   # P matrix
-        Pup = cas.MX.sym('P', 9, 9)   # P matrix
-
-        # declare CASADI functions
-        xpred = cas.MX(self.Ad) @ x + cas.MX(self.Bd) @ u
-        Ppred = cas.MX(self.Ad) @ P @ cas.MX(self.Ad.T) + cas.MX(self.Q)
-        self.Pred = cas.Function('Pred', [x, u, P], [xpred, Ppred], [
-                                 'x', 'u', 'P'], ['xpred', 'Ppred'])
-
-        up = x[3] / C50p
-        ur = x[7] / C50r
-        Phi = up/(up + ur + 1e-6)
-        U_50 = 1 - beta * (Phi - Phi**2)
-        i = (up + ur)/U_50
-
-        h_fun = E0 - Emax * i ** gamma / (1 + i ** gamma) + x[8]
-        self.output = cas.Function('output', [x], [h_fun], ['x'], ['bis'])
-
-        H = derivated_of_f(x, self.BIS_param)
-        # cas.gradient(h_fun, x).T
-
-        S = H @ P @ H.T + cas.MX(self.R)
-        K = P @ H.T @ cas.inv(S)
-
-        error = y - h_fun
-        xup = x + K @ error
-        Pup = (cas.MX(np.identity(9)) - K@H)@P
-        # S = H @ P0 @ H.T + cas.MX(self.R)
-        self.Update = cas.Function('Update', [x, y, P], [xup, Pup, error, S, K], [
-                                   'x', 'y', 'P'], ['xup', 'Pup', 'error', 'S', 'K'])
-
         # init state and output
         self.x = x0
         self.Biso = [BIS(self.x[3], self.x[7], BIS_param)]
         self.error = 0
+
+    def Pred(self, x: np.array, u: np.array, P: np.array):
+        """Compute the prediction step.
+
+        Parameters
+        ----------
+        x : np.array
+            State vector at time k.
+        u : np.array
+            Control input at time k.
+        P : np.array
+            Covariance matrix at time k.
+
+        Returns
+        -------
+        x_pred: np.array
+            Predicted state vector at time k+1.
+        P_pred: np.array
+            Precited covariance matrix at time k+1.
+        """
+        x_pred = self.Ad @ x + self.Bd @ u
+        P_pred = self.Ad @ P @ self.Ad.T + self.Q
+        return x_pred, P_pred
+
+    def Update(self, x_pred: np.array, y: np.array, P: np.array):
+        """
+        Compute the Update sep.
+
+        Parameters
+        ----------
+        x_pred : np.array
+            State vector predicted at time k for k+1.
+        y : np.array
+            Measure at time k+1.
+        P : np.array
+            Covariance matrix predicted at time k for time k+1.
+
+        Returns
+        -------
+
+
+        """
+        H = derivated_of_f(x_pred, self.BIS_param)
+        S = H @ P @ H.T + self.R
+
+        K = P @ H.T * 1/S
+
+        error = y - (BIS(x_pred[3], x_pred[7], self.BIS_param) + self.x[8])
+        xup = x_pred + K * error
+        Pup = (np.identity(9) - K @ H)@P
+
+        return xup, Pup, K, error, S
 
     def one_step(self, u: list, bis: float) -> tuple[list, float]:
         """
@@ -245,20 +255,13 @@ class EKF_integrator_new:
             Filtered BIS.
 
         """
-        self.Predk = self.Pred(x=self.x, u=u, P=self.P)
-        self.xpr = self.Predk['xpred'].full().flatten()
-        self.Ppr = self.Predk['Ppred'].full()
+        u = np.expand_dims(u, axis=0).T
 
-        self.Updatek = self.Update(x=self.xpr, y=bis, P=self.Ppr)
-        self.x = self.Updatek['xup'].full().flatten()
-        self.P = self.Updatek['Pup'].full()
-        self.K = self.Updatek['K'].full()
-        self.error = float(self.Updatek['error'])
+        self.xpr, self.Ppr = self.Pred(x=self.x, u=u, P=self.P)
+
+        self.x, self.P,  self.K, self.error, self.S = self.Update(x_pred=self.xpr, y=bis, P=self.Ppr)
         self.bis_pred = bis - self.error
-        self.S = self.Updatek['S']
 
-        # self.x[3] = max(1e-3, self.x[3])
-        # self.x[7] = max(1e-3, self.x[7])
         self.x = np.clip(self.x, a_min=1e-3, a_max=None)
         self.bis = BIS(self.x[3], self.x[7], self.BIS_param) + self.x[8]
 
@@ -354,7 +357,7 @@ class MEKF:
             # for ekf in self.EKF_list:
             #     ekf.x = self.EKF_list[self.best_index].x
 
-        X = self.EKF_list[self.best_index].x
+        X = self.EKF_list[self.best_index].x[:, 0]
         X = np.concatenate((X, self.grid_vector[self.best_index][:3]), axis=0)
 
         return X, self.EKF_list[self.best_index].bis

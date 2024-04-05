@@ -129,7 +129,7 @@ parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
 
 param_PID = [0.032, 738, 9, 2, 0.06, 400, 5]
 phase = 'induction'
-control_type = 'MEKF-MHE-NMPC'
+control_type = 'MEKF-NMPC'
 if control_type == 'PID':
     control_param = param_PID
 elif control_type == 'EKF-NMPC':
@@ -190,9 +190,9 @@ plt.show()
 
 plt.figure()
 plt.plot(df['Time'], df['u_propo'], label='Propofol', color='b')
-plt.plot(df['Time'], df['u_propo_target'], 'b--', label='target')
+# plt.plot(df['Time'], df['u_propo_target'], 'b--', label='target')
 plt.plot(df['Time'], df['u_remi'], label='Remifentanil', color='r')
-plt.plot(df['Time'], df['u_remi_target'], 'r--', label='target')
+# plt.plot(df['Time'], df['u_remi_target'], 'r--', label='target')
 plt.grid()
 plt.xlabel('Time [s]')
 plt.ylabel('Drug rate')

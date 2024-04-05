@@ -86,7 +86,7 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
                                          R=control_param[13], umax=[up_max, ur_max], umin=[0, 0], bool_u_eq=True)
 
     # define dataframe to return
-    df = pd.DataFrame(columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
+    line_list = []
     u_propo, u_remi = 0, 0
     if phase == 'induction':
         N_simu = 10*60//ts
@@ -122,8 +122,10 @@ def perform_simulation(Patient_info: list, phase: str, control_type: str, contro
         end = perf_counter()
         line = pd.DataFrame([[i*ts, bis[0], u_propo, u_remi, end-start]],
                             columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
-        df = pd.concat((df, line))
+        line_list.append(line)
+
         # if control_type == 'MHE-NMPC':
         #     df['u_propo_target'].loc[i] = controller.ueq[0]
         #     df['u_remi_target'].loc[i] = controller.ueq[1]
+    df = pd.concat(line_list)
     return df

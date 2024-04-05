@@ -23,10 +23,10 @@ training_patient = np.random.randint(0, 500, size=16)
 
 # choose the file to read, NMPC and MMPC have a sample time of 2s, PID of 1s.
 
-title = 'PID'
+# title = 'PID'
 # title = 'MEKF_NMPC'
 # title = 'EKF_NMPC'
-# title = 'MHE_NMPC'
+title = 'MHE_NMPC'
 # title = 'MEKF_MHE_NMPC'
 print(f"Reading {title} results")
 if title == 'PID':

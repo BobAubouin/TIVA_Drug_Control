@@ -34,7 +34,7 @@ image_folder_path = './Results_Images/'
 try:
     Table_PID = pd.read_csv(f"{folder_path}result_table_PID_{phase}_{Number_of_patient}.csv")
     Table_MHEMPC = pd.read_csv(f"{folder_path}result_table_MHE_NMPC_{phase}_{Number_of_patient}.csv")
-    Table_MMPC = pd.read_csv(f"{folder_path}result_table_MEKF_MHE_NMPC_{phase}_{Number_of_patient}.csv")
+    # Table_MMPC = pd.read_csv(f"{folder_path}result_table_MEKF_MHE_NMPC_{phase}_{Number_of_patient}.csv")
     if phase == 'total':
         # Table_MEMPC = pd.read_csv(f"{folder_path}result_table_MEKF_NMPC_{phase}_{Number_of_patient}.csv")
         Table_MMPC = pd.read_csv(f"{folder_path}result_table_MEKF_MHE_NMPC_{phase}_{Number_of_patient}.csv")
@@ -43,8 +43,8 @@ try:
                                                   'ST10_mean', 'ST10_max', 'ST20_mean', 'ST20_max', 'US_mean', 'US_max'])
 
     if phase == 'induction':
-        final_table_induction['Controller'] = ['PID', 'MHE-NMPC', 'MMM']  # ,'MMPC']  # , 'NMPC', 'MMPC'
-        list_data = [Table_PID, Table_MHEMPC, Table_MMPC]
+        final_table_induction['Controller'] = ['PID', 'MHE-NMPC']  # , 'MMM']  # ,'MMPC']  # , 'NMPC', 'MMPC'
+        list_data = [Table_PID, Table_MHEMPC]  # , Table_MMPC]
     elif phase == 'total':
         final_table_induction['Controller'] = ['PID', 'MHE-NMPC', 'MMM']  # 'MEKF-MPC'
         list_data = [Table_PID, Table_MHEMPC, Table_MMPC]  # Table_MEMPC
@@ -220,66 +220,68 @@ if bool_MHEMPC:
 
 
 # %% Create BIS figure
-ax: matplotlib.pyplot.Axes
 if phase == 'total':
     fig, ax = plt.subplots(figsize=(10, 4))
 else:
-    fig, ax = plt.subplots()
+    fig, ax = plt.subplots(2, 1)
 if bool_PID:
-    ax.plot(Time_PID, BIS_PID, label='PID')
+    ax[0].plot(Time_PID, BIS_PID, label='PID')
 if bool_NMPC:
-    ax.plot(Time_MPC, BIS_NMPC, label='MEKF-MPC')
+    ax[0].plot(Time_MPC, BIS_NMPC, label='MEKF-MPC')
 if bool_MHEMPC:
-    ax.plot(Time_MPC, BIS_MHEMPC, label='MHE-MPC', color=mcolors.TABLEAU_COLORS['tab:red'])
+    ax[0].plot(Time_MPC, BIS_MHEMPC, label='MHE-MPC', color=mcolors.TABLEAU_COLORS['tab:red'])
 if bool_MMPC:
-    ax.plot(Time_MPC, BIS_MMPC, label='MMM', color=mcolors.TABLEAU_COLORS['tab:green'])
-ax.grid(linewidth=0.4)
-ax.legend(fontsize=13)
+    ax[0].plot(Time_MPC, BIS_MMPC, label='MMM', color=mcolors.TABLEAU_COLORS['tab:green'])
+ax[0].grid(linewidth=0.4)
+ax[0].legend(fontsize=13)
 
 # ax.set_yticks(list(ax.get_yticks()) + [int(BIS_PID[0])])
-ax.set_ylim([16, 102])
+ax[0].set_ylim([16, 102])
 # ax.set_xlim([-0.2, 10.2])
-ax.set_xlabel('Time (min)', fontsize=13)
-ax.set_ylabel('BIS', fontsize=13)
+# ax.set_xlabel('Time (min)', fontsize=13)
+ax[0].set_ylabel('BIS', fontsize=13)
 # ygridlines = ax.get_ygridlines()
 # gridline_of_interest = ygridlines[-1]
 # gridline_of_interest.set_visible(False)
 plt.draw()
 
 # save it
-savepath = image_folder_path + f"worst_bis_induction.pdf"
-plt.savefig(savepath, bbox_inches='tight', format='pdf')
-plt.show()
+# savepath = image_folder_path + f"worst_bis_induction.pdf"
+# plt.savefig(savepath, bbox_inches='tight', format='pdf')
+# plt.show()
 
 # Create drug rates figures
 linewidth = 1.3
-if phase == 'total':
-    plt.figure(figsize=(10, 4))
-if bool_PID:
-    plt.plot(Time_PID, Up_PID, label='Propofol PID (mg/s)',
-             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'])
-    plt.plot(Time_PID, Ur_PID, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'],
-             label='Remifentanil PID (µg/s)')
-if bool_NMPC:
-    plt.plot(Time_MPC, Up_NMPC, label='Propofol MEKF-MPC (mg/s)',
-             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'])
-    plt.plot(Time_MPC, Ur_NMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'],
-             label='Remifentanil MEKF-MPC (µg/s)')
-if bool_MMPC:
-    plt.plot(Time_MPC, Up_MMPC, label='Propofol MMM (mg/s)',
-             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'])
-    plt.plot(Time_MPC, Ur_MMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'],
-             label='Remifentanil MMM (µg/s)')
-if bool_MHEMPC:
-    plt.plot(Time_MPC, Up_MHEMPC, label='Propofol MHE-MPC (mg/s)',
-             linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'])
-    plt.plot(Time_MPC, Ur_MHEMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'],
-             label='Remifentanil MHE-MPC (µg/s)')
 
-plt.grid(linewidth=0.4)
-plt.legend(fontsize=13)
+if bool_PID:
+    ax[1].plot(Time_PID, Up_PID, label='$u_p$ PID',
+               linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'])
+    ax[1].plot(Time_PID, Ur_PID, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:blue'],
+               label='$u_r$  PID')
+if bool_NMPC:
+    ax[1].plot(Time_MPC, Up_NMPC, label='Propofol MEKF-MPC (mg/s)',
+               linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'])
+    ax[1].plot(Time_MPC, Ur_NMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:orange'],
+               label='Remifentanil MEKF-MPC (µg/s)')
+if bool_MMPC:
+    ax[1].plot(Time_MPC, Up_MMPC, label='Propofol MMM (mg/s)',
+               linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'])
+    ax[1].plot(Time_MPC, Ur_MMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:green'],
+               label='Remifentanil MMM (µg/s)')
+if bool_MHEMPC:
+    ax[1].plot(Time_MPC, Up_MHEMPC, label='$u_p$ MHE-MPC',
+               linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'])
+    ax[1].plot(Time_MPC, Ur_MHEMPC, linestyle=(0, (3, 1)), linewidth=linewidth, color=mcolors.TABLEAU_COLORS['tab:red'],
+               label='$u_r$ MHE-MPC')
+
+ax[1].grid(linewidth=0.4)
+ax[1].legend(fontsize=13)
 # plt.xlim([-0.2, 10.2])
-plt.xlabel('Time (min)', fontsize=13)
+ax[1].set_xlabel('Time (min)', fontsize=13)
+ax[1].set_ylabel('Drug rates', fontsize=13)
+# use log scale for y axis
+# ax[1].set_yscale('log')
+
 plt.draw()
 
 # save it

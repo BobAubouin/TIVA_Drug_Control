@@ -610,6 +610,279 @@ class NMPC_integrator:
         return ueq
 
 
+class NMPC_integrator_multi_shooting:
+    """Implementation of Non-linear MPC for the Coadministration of Propofol and Remifentanil in Anesthesia.
+
+            Parameters
+        ----------
+        A : list
+            Dynamic matric of the continuous system dx/dt = Ax + Bu.
+        B : list
+            Input matric of the continuous system dx/dt = Ax + Bu.
+        BIS_param : list
+            Contains parameters of the non-linear function output BIS_param = [C50p, C50r, gamma, beta, E0, Emax]
+        ts : float, optional
+            Sampling time of the system. The default is 1.
+        N : int, optional
+            Prediction horizon of the controller. The default is 10.
+        Nu : int, optional
+            Control horizon of the controller. The default is 10.
+        R : list, optional
+            Cost matrix of the input amplitude. The default is np.diag([2, 1]).
+        umax : list, optional
+            maximum value for the control inputs. The default is [1e10]*2.
+        umin : list, optional
+            minimum value for the control inputs. The default is [0]*2.
+        dumax : list, optional
+            maximum value for the control inputs rates. The default is [0.2, 0.4].
+        dumin : list, optional
+            minimum value for the control inputs rates. The default is [-0.2, -0.4].
+        bool_u_eq : bool, optional
+            If True, the equilibrium input is computed at each step time. The default is False.
+        Returns
+        -------
+        None.
+        """
+
+    def __init__(self, A: list, B: list, BIS_param: list, ts: float = 1,
+                 N: int = 10, Nu: int = 10, R: list = np.diag([2, 1]),
+                 umax: list = [1e10]*2, umin: list = [0]*2,
+                 dumax: list = [1e10, 1e10], dumin: list = [-1e10, -1e10],
+                 bool_u_eq: bool = False):
+        """Init NMPC class."""
+        Ad, Bd = discretize(A, B, ts)
+        self.BIS_param = BIS_param
+        beta = BIS_param[3]
+        E0 = BIS_param[4]
+        Emax = BIS_param[5]
+
+        self.umax = umax
+        self.umin = umin
+        self.dumin = dumin
+        self.dumax = dumax
+        self.R = R  # control cost
+        self.N = N  # horizon
+        self.Nu = Nu
+        self.bool_u_eq = bool_u_eq
+
+        self.simple_A = np.array([[Ad[0, 0], Ad[0, 3], 0, 0],
+                                  [Ad[3, 0], Ad[3, 3], 0, 0],
+                                  [0, 0, Ad[4, 4], Ad[4, 7]],
+                                  [0, 0, Ad[7, 4], Ad[7, 7]]])
+        self.simple_B = Bd[[0, 3, 4, 7], :]
+        self.simple_E = np.array([[Ad[0, 1], Ad[0, 2], 0, 0],
+                                  [Ad[3, 1], Ad[3, 2], 0, 0],
+                                  [0, 0, Ad[4, 5], Ad[4, 6]],
+                                  [0, 0, Ad[7, 5], Ad[7, 6]]])
+
+        # declare CASADI variables
+        x = cas.MX.sym('x', 9)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
+        prop = cas.MX.sym('prop')  # Propofol infusion rate [mg/ml/min]
+        rem = cas.MX.sym('rem')  # Remifentanil infusion rate [mg/ml/min]
+        u = cas.vertcat(prop, rem)
+        bis_param_cas = cas.MX.sym('bis_param_cas', 3)
+        # declare CASADI functions
+
+        xpred = cas.MX(Ad) @ x + cas.MX(Bd) @ u
+        self.Pred = cas.Function('Pred', [x, u], [xpred], ['x', 'u'], ['x+'])
+
+        up = x[3] / bis_param_cas[0]
+        ur = x[7] / bis_param_cas[1]
+        Phi = up/(up + ur + 1e-6)
+        U_50 = 1 - beta * (Phi - Phi**2)
+        i = (up + ur)/U_50
+
+        bis = E0 - Emax * i ** bis_param_cas[2] / (1 + i ** bis_param_cas[2]) + x[8]
+
+        self.Output = cas.Function('Output', [x, bis_param_cas], [bis], ['x', 'bis_param_cas'], ['bis'])
+
+        self.U_prec = [0]*N*2
+        self.internal_target = None
+
+        # Optimization problem definition
+        w = []
+        self.lbw = []
+        self.ubw = []
+        J = 0
+        gu = []
+        gbis = []
+        gx = []
+        self.lbg_u = []
+        self.ubg_u = []
+        self.lbg_bis = []
+        self.ubg_bis = []
+        self.lbg_x = []
+        self.ubg_x = []
+
+        X0 = cas.MX.sym('X0', 9)
+        Bis_target = cas.MX.sym('Bis_target')
+        U_prec_true = cas.MX.sym('U_prec', 2)
+        R = cas.MX.sym('R', 2)
+        ueq = cas.MX.sym('ueq', 2)
+        X = cas.MX.sym('X', 9 * self.N)
+        for k in range(self.N):
+            Xk_1 = X[9*k:9*k+9]  # X_(k+1)
+            if k <= self.Nu-1:
+                U = cas.MX.sym('U', 2)
+                w += [U]
+                self.lbw += self.umin
+                self.ubw += self.umax
+            if k == 0:
+                X_k = X0
+                U_prec = U_prec_true
+            else:
+                X_k = X[9*(k-1):9*(k-1)+9]
+                U_prec = w[-2]
+
+            Pred = self.Pred(x=Xk, u=U)
+            Xk_1_pred = Pred['x+']
+            Hk = self.Output(x=Xk_1_pred, bis_param_cas=bis_param_cas)
+            bis = Hk['bis']
+
+            # J+= ((bis - Bis_target)**2/100 + ((bis - Bis_target - 25)/30)**8)
+            #    + (U-U_prec).T @ self.R @ (U-U_prec)
+
+            # Ju = ((U-U_prec).T @ self.R @ (U-U_prec)/100 +
+            #       (((U-U_prec).T @ self.R @ (U-U_prec)+10)/10)**4)
+
+            # J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) + Ju
+
+            J += (bis - Bis_target)**2 + (U-ueq).T @ cas.diag(R) @ (U - ueq)
+            # if k == self.N-1:
+            #     J += ((bis - Bis_target)**2/100 + ((bis - Bis_target - 30)/30)**32) * 1e3
+
+            gu += [U-U_prec]
+            gbis += [bis]
+            gx += Xk_1 - Xk_1_pred
+            self.lbg_u += dumin
+            self.ubg_u += dumax
+            self.lbg_bis += [0]
+            self.ubg_bis += [100]
+            self.lbg_x += [0]*9
+            self.ubg_x += [0]*9
+        w += [X]
+        self.lbw += [1e-3]*9*self.N
+        self.ubw += [1e10]*9*self.N
+
+        opts = {'ipopt.print_level': 1, 'print_time': 0, 'ipopt.max_iter': 300}
+        prob = {'f': J, 'p': cas.vertcat(*[X0, Bis_target, U_prec_true, bis_param_cas, R, ueq]),
+                'x': cas.vertcat(*w), 'g': cas.vertcat(*(gu+gbis+gx))}  #
+        self.solver = cas.nlpsol('solver', 'ipopt', prob, opts)
+
+    def one_step(self, x: list, Bis_target: float, R: list = None) -> tuple[float, float]:
+        """
+        Compute the next optimal control input given the current state of the system and the BIS target.
+
+        Parameters
+        ----------
+        x : list
+            Last state estimation.
+        Bis_target : float
+            Current BIS target.
+        bis_param : list, optional
+            BIS model parameters. The default is None.
+
+        Returns
+        -------
+        Up : float
+            Propofol rates for the next sample time.
+        Ur : float
+            Remifentanil rates for the next sample time.
+
+        """
+
+        bis_param = x[9:12]
+        x = x[:9]
+
+        # the init point of the optimization proble is the previous optimal solution
+        w0 = []
+        for k in range(self.Nu):
+            if k < self.Nu-1:
+                w0 += self.U_prec[2*(k+1):2*(k+1)+2]
+            else:
+                w0 += self.U_prec[2*k:2*k+2]
+
+        # Init internal target
+        self.internal_target = Bis_target
+        if bis_param is None:
+            bis_param = self.BIS_param[:3]
+        else:
+            self.BIS_param[:3] = bis_param
+
+        if R is not None:
+            self.R = R
+
+        if self.bool_u_eq:
+            ueq = self.compute_equilibrium_input(self.R, x)
+        else:
+            ueq = [0]*2
+        self.ueq = ueq
+        sol = self.solver(x0=w0,
+                          p=list(x) + [self.internal_target] + list(self.U_prec[0:2]) +
+                          list(bis_param) + list(np.diag(self.R)) + list(ueq),
+                          lbx=self.lbw,
+                          ubx=self.ubw,
+                          lbg=self.lbg_u + self.lbg_bis,
+                          ubg=self.ubg_u + self.ubg_bis)
+
+        w_opt = sol['x'].full().flatten()
+
+        Up = w_opt[::2]
+        Ur = w_opt[1::2]
+        self.U_prec = list(w_opt)
+
+        Hk = self.Output(x=x)
+        bis = float(Hk['bis'])
+
+        # print for debug
+        if False:
+            bis = np.zeros(self.N)
+            Xk = x
+            for k in range(self.N):
+                if k < self.Nu-1:
+                    u = w_opt[2*k:2*k+2]
+                else:
+                    u = w_opt[-2:]
+                Pred = self.Pred(x=Xk, u=u)
+                Xk = Pred['x+']
+                Hk = self.Output(x=Xk)
+                bis[k] = float(Hk['bis'])
+
+        if False:
+            fig, axs = plt.subplots(2, figsize=(6, 8))
+            axs[0].plot(Up, label='propofol')
+            axs[0].plot(Ur, label='remifentanil')
+            axs[0].grid()
+            axs[0].legend()
+            axs[1].plot(bis, label='bis')
+            axs[1].plot([self.internal_target]*len(bis), label='bis target')
+            axs[1].grid()
+            axs[1].legend()
+            plt.show()
+
+        return Up[0], Ur[0]
+
+    def compute_equilibrium_input(self, R: list, x_k: list) -> list:
+
+        x_simple = cas.MX.sym('x', 4)  # x1p, x2p, x3p, xep, x1r, x2r, x3r, xer [mg/ml]
+        u = cas.MX.sym('u', 2)
+        Hk = self.Output(x=cas.vertcat(*[x_simple[0], cas.MX(x_k[1]), cas.MX(x_k[2]), x_simple[1], x_simple[2],
+                                         cas.MX(x_k[5]), cas.MX(x_k[6]), x_simple[3], cas.MX(x_k[8])]),
+                         bis_param_cas=self.BIS_param[:3])
+        bis = Hk['bis']
+        J = (bis - self.internal_target)**2
+        x_plus = self.simple_A @ x_simple + self.simple_B @ u + \
+            self.simple_E @ np.array([x_k[1], x_k[2], x_k[5], x_k[6]])
+        g = (x_plus - x_simple).T @ (x_plus - x_simple) + (u[0]*cas.sqrt(R[0, 0]) - u[1]*cas.sqrt(R[1, 1]))**2
+        opts = {'ipopt.print_level': 1, 'print_time': 0, 'ipopt.max_iter': 300}
+        prob = {'f': J, 'x': cas.vertcat(u, x_simple), 'g': g}
+        solver = cas.nlpsol('solver', 'ipopt', prob, opts)
+        sol = solver(x0=[0, 0] + [2] * 4, lbx=[0]*6, ubx=[20]*6, lbg=[0], ubg=[0])
+        ueq = sol['x'].full().flatten()
+        ueq = ueq[0:2]
+        return ueq
+
+
 class MMPC():
     """Implementation of a multimodel predictive control.
 
