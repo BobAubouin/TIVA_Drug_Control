@@ -1,0 +1,177 @@
+from time import perf_counter
+import numpy as np
+import pandas as pd
+import python_anesthesia_simulator as pas
+
+from close_loop_anesth.pid import PID
+from close_loop_anesth.mpc import NMPC_integrator_multi_shooting
+from close_loop_anesth.ekf import EKF
+from close_loop_anesth.mekf import MEKF
+from close_loop_anesth.mhe import MHE
+
+
+def perform_simulation(Patient_info: list,
+                       phase: str,
+                       control_type: str,
+                       control_param: dict,
+                       estim_param: dict,
+                       random_bool: list,
+                       sampling_time: float = 2
+                       ) -> pd.DataFrame:
+    """Run the simulation of the closed loop anesthesia system.
+
+    The phase
+
+    Parameters
+    ----------
+    Patient_info : list
+        list of patient infos [age, height, weight, gender]
+    phase : str
+        "induction" or "total".
+    control_type : str
+        can be 'PID', MEKF_NMPC', 'EKF_NMPC', 'MHE_NMPC'
+    control_param : dict
+        dict of control parameter specific for each control type: 
+        - for PID [K, Ti, Td, ratio, K_2, Ti_2, Td_2], where _2 is used during maintenance.
+        - for NMPC [N, Nu, R_nmpc]
+
+    estim_param : dict
+        dict of estimator parameter specific for each control type: 
+        - for PID [None]
+        - for EKF_NMPC [Q, R, P0]
+        - for MEKF_NMPC [Q, R, P0, grid_vector, eta0, lambda_1, lambda_2, nu, epsilon]
+        - for MHE_NMPC [Q, R, N, theta]
+        # - for MEKF-MHE_NMPC [Q_est, R_est, P0_est, grid_vector, eta0, design_param, Q_mhe, R_mhe, N_mhe, theta, switch_time]
+
+    random_bool : list
+        list of len 2, first index to add uncertainty in the PK model and second index to add uncertainty in the PD model.
+    sampling_time : float, optional
+        sampling time of the simulation. The default is 2.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with the results of the simulation.l
+    """
+    # define sampling time
+    control_param['ts'] = sampling_time*2
+
+    patient_simu = pas.Patient(Patient_info, save_data_bool=False,
+                               random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=sampling_time)
+
+    # define input constraints
+    bis_target = 50
+    up_max = 6.67
+    ur_max = 16.67
+
+    # define controller
+    if control_type == 'PID':
+        ratio = control_param['ratio']
+        control_param_induction = {'Kp': control_param['Kp_1'],
+                                   'Ti': control_param['Ti_1'],
+                                   'Td': control_param['Td_1'],
+                                   'umin': 0,
+                                   'umax': max(up_max, ur_max / ratio),
+                                   }
+        if phase == 'total':
+            control_param_maintenance = {'Kp': control_param['Kp_2'],
+                                         'Ti': control_param['Ti_2'],
+                                         'Td': control_param['Td_2'],
+                                         }
+
+        controller = PID(**control_param_induction)
+    else:
+        estim_param['ts'] = sampling_time
+
+        # get Nominal model from the patient info
+        Patient_nominal_simu = pas.Patient(Patient_info,
+                                           save_data_bool=False,
+                                           random_PK=False,
+                                           random_PD=False,
+                                           model_bis='Bouillon',
+                                           model_propo='Eleveld',
+                                           model_remi='Eleveld'
+                                           )
+
+        Ap = Patient_nominal_simu.propo_pk.continuous_sys.A[:4, :4]
+        Bp = Patient_nominal_simu.propo_pk.continuous_sys.B[:4]
+        Ar = Patient_nominal_simu.remi_pk.continuous_sys.A[:4, :4]
+        Br = Patient_nominal_simu.remi_pk.continuous_sys.B[:4]
+
+        BIS_param_nominal = Patient_nominal_simu.hill_param
+
+        A = np.block([[Ap, np.zeros((4, 4))], [np.zeros((4, 4)), Ar]])
+        B = np.block([[Bp, np.zeros((4, 1))], [np.zeros((4, 1)), Br]])
+        control_param['A'] = A
+        control_param['B'] = B
+        control_param['BIS_param'] = BIS_param_nominal
+        control_param['umax'] = [up_max, ur_max]
+        control_param['umin'] = [0, 0]
+        control_param['bool_u_eq'] = True
+
+        A_int = np.block([[Ap, np.zeros((4, 5))], [np.zeros((4, 4)), Ar, np.zeros((4, 1))], [np.zeros((1, 9))]])
+        B_int = np.block([[Bp, np.zeros((4, 1))], [np.zeros((4, 1)), Br], [0, 0]])
+        if control_type == 'EKF_NMPC' or control_type == 'MEKF_NMPC':
+            estim_param['A'] = A_int
+            estim_param['B'] = B_int
+        else:
+            estim_param['A'] = A
+            estim_param['B'] = B
+            estim_param['BIS_param'] = BIS_param_nominal
+
+        if control_type == 'EKF_NMPC':
+            estimator = EKF(**estim_param)
+            controller = NMPC_integrator_multi_shooting(**control_param)
+        elif control_type == 'MEKF_NMPC':
+            estimator = MEKF(**estim_param)
+            controller = NMPC_integrator_multi_shooting(**control_param)
+        elif control_type == 'MHE_NMPC':
+            estimator = MHE(**estim_param)
+            controller = NMPC_integrator_multi_shooting(**control_param)
+        # elif control_type == 'MEKF-MHE_NMPC':
+        #     estimator = MHE(
+        #         A, B, BIS_param_nominal, A, B, ts=ts, mekf_param=control_param[0:6], mhe_param=control_param[6:10], switch_time=control_param[10])
+        #     controller = NMPC_integrator_multi_shooting(**control_param)
+
+    # define dataframe to return
+    line_list = []
+    u_propo, u_remi = 0, 0
+    if phase == 'induction':
+        N_simu = 10*60//sampling_time
+        bool_noise = True
+    else:
+        N_simu = 20*60//sampling_time
+        bool_noise = True
+
+    for i in range(N_simu):
+        if phase == 'induction':
+            disturbance = [0, 0, 0]
+        else:
+            disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
+            if i*sampling_time == 9*60 and control_type == 'PID':
+                controller.change_param(**control_param_maintenance)
+
+        bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=bool_noise, dist=disturbance)
+
+        if i == N_simu - 1:
+            break
+        start = perf_counter()
+        if control_type == 'PID':
+            u_propo = controller.one_step(bis[0], bis_target)
+            u_remi = min(ur_max, max(0, u_propo * ratio))
+            u_propo = min(up_max, max(0, u_propo))
+        else:
+            x_estimated, _ = estimator.one_step([u_propo, u_remi], bis[0])
+            if control_type == 'EKF_NMPC':
+                x_estimated = np.concatenate((x_estimated[:-1], BIS_param_nominal[:3], [x_estimated[-1]]))
+            u_propo, u_remi = controller.one_step(x_estimated, bis_target)
+        end = perf_counter()
+        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start]],
+                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
+        line_list.append(line)
+
+        # if control_type == 'MHE_NMPC':
+        #     df['u_propo_target'].loc[i] = controller.ueq[0]
+        #     df['u_remi_target'].loc[i] = controller.ueq[1]
+    df = pd.concat(line_list)
+    return df

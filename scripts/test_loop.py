@@ -1,200 +1,84 @@
-from loop import perform_simulation
-import scipy
 import matplotlib.pyplot as plt
 import numpy as np
-import python_anesthesia_simulator as pas
-import optuna
 import time
-import multiprocessing as mp
-from functools import partial
+import sys
+import os
+import contextlib
+
+from close_loop_anesth.loop import perform_simulation
+from create_param import load_mekf_param, load_mhe_param
 
 
-study_petri = optuna.load_study(study_name="petri_final_3", storage="sqlite:///Results_data/petri_2.db")
-Q_est = study_petri.best_params['Q'] * np.diag([0.1, 0.1, 0.05, 0.05, 1, 1, 10, 1, 0.0039])
-R_est = study_petri.best_params['R']
-P0_est = 1e-3 * np.eye(9)
-lambda_1 = 1
-lambda_2 = study_petri.best_params['lambda_2']
-nu = 1.e-5
-epsilon = study_petri.best_params['epsilon']
-design_param = [lambda_1, lambda_2, nu, epsilon]
+class suppress_stdout_stderr(object):
+    '''
+    A context manager for doing a "deep suppression" of stdout and stderr in 
+    Python, i.e. will suppress all print, even if the print originates in a 
+    compiled C/Fortran sub-function.
+       This will not suppress raised exceptions, since exceptions are printed
+    to stderr just before a script exits, and after the context manager has
+    exited (at least, I think that is why it lets exceptions through).      
 
-BIS_param_nominal = pas.BIS_model().hill_param
+    '''
 
-cv_c50p = 0.182
-cv_c50r = 0.888
-cv_gamma = 0.304
-# estimation of log normal standard deviation
-w_c50p = np.sqrt(np.log(1+cv_c50p**2))
-w_c50r = np.sqrt(np.log(1+cv_c50r**2))
-w_gamma = np.sqrt(np.log(1+cv_gamma**2))
+    def __init__(self):
+        # Open a pair of null files
+        self.null_fds = [os.open(os.devnull, os.O_RDWR) for x in range(2)]
+        # Save the actual stdout (1) and stderr (2) file descriptors.
+        self.save_fds = [os.dup(1), os.dup(2)]
 
-c50p_list = BIS_param_nominal[0]*np.exp([-2*w_c50p, -w_c50p, -0.5*w_c50p, 0, w_c50p])  # , -w_c50p
-c50r_list = BIS_param_nominal[1]*np.exp([-2*w_c50r, -w_c50r, -0.5*w_c50r, 0, w_c50r])
-gamma_list = BIS_param_nominal[2]*np.exp([-2*w_gamma, -w_gamma, -0.5*w_gamma, 0, w_gamma])  #
-# surrender list by Inf value
-c50p_list = np.concatenate(([-np.Inf], c50p_list, [np.Inf]))
-c50r_list = np.concatenate(([-np.Inf], c50r_list, [np.Inf]))
-gamma_list = np.concatenate(([-np.Inf], gamma_list, [np.Inf]))
+    def __enter__(self):
+        # Assign the null pointers to stdout and stderr.
+        os.dup2(self.null_fds[0], 1)
+        os.dup2(self.null_fds[1], 2)
 
-
-def get_probability(c50p_set: list, c50r_set: list, gamma_set: list, method: str) -> float:
-    """_summary_
-
-    Parameters
-    ----------
-    c50p_set : float
-        c50p set.
-    c50r_set : float
-        c50r set.
-    gamma_set : float
-        gamma set.
-    method : str
-        method to compute the probability. can be 'proportional' or 'uniform'.
-
-    Returns
-    -------
-    float
-        propability of the parameter set.
-    """
-    if method == 'proportional':
-        mean_c50p = 4.47
-        mean_c50r = 19.3
-        mean_gamma = 1.13
-        # cv_c50p = 0.182
-        # cv_c50r = 0.888
-        # cv_gamma = 0.304
-        w_c50p = np.sqrt(np.log(1+cv_c50p**2))
-        w_c50r = np.sqrt(np.log(1+cv_c50r**2))
-        w_gamma = np.sqrt(np.log(1+cv_gamma**2))
-        c50p_normal = scipy.stats.lognorm(scale=mean_c50p, s=w_c50p)
-        proba_c50p = c50p_normal.cdf(c50p_set[1]) - c50p_normal.cdf(c50p_set[0])
-
-        c50r_normal = scipy.stats.lognorm(scale=mean_c50r, s=w_c50r)
-        proba_c50r = c50r_normal.cdf(c50r_set[1]) - c50r_normal.cdf(c50r_set[0])
-
-        gamma_normal = scipy.stats.lognorm(scale=mean_gamma, s=w_gamma)
-        proba_gamma = gamma_normal.cdf(gamma_set[1]) - gamma_normal.cdf(gamma_set[0])
-
-        proba = proba_c50p * proba_c50r * proba_gamma
-    elif method == 'uniform':
-        proba = 1/(len(c50p_list))/(len(c50r_list))/(len(gamma_list))
-    return proba
+    def __exit__(self, *_):
+        # Re-assign the real stdout/stderr back to (1) and (2)
+        os.dup2(self.save_fds[0], 1)
+        os.dup2(self.save_fds[1], 2)
+        # Close all file descriptors
+        for fd in self.null_fds + self.save_fds:
+            os.close(fd)
 
 
-grid_vector = []
-eta0 = []
-proba = []
-alpha = 10
-for i, c50p in enumerate(c50p_list[1:-1]):
-    for j, c50r in enumerate(c50r_list[1:-1]):
-        for k, gamma in enumerate(gamma_list[1:-1]):
-            grid_vector.append([c50p, c50r, gamma]+BIS_param_nominal[3:])
-            c50p_set = [np.mean([c50p_list[i], c50p]),
-                        np.mean([c50p_list[i+2], c50p])]
+NMPC_param = {'N': 60, 'Nu': 60, 'R': 0.1*np.diag([4, 1])}
 
-            c50r_set = [np.mean([c50r_list[j], c50r]),
-                        np.mean([c50r_list[j+2], c50r])]
+mekf_param = load_mekf_param([5, 6, 6],
+                             q=10,
+                             r=1,
+                             alpha=10,
+                             lambda_2=1e-2,
+                             epsilon=0.8)
 
-            gamma_set = [np.mean([gamma_list[k], gamma]),
-                         np.mean([gamma_list[k+2], gamma])]
+mhe_param = load_mhe_param(R=0.1, N_mhe=30, vmax=1e4, q=1e3)
 
-            eta0.append(alpha*(1-get_probability(c50p_set, c50r_set, gamma_set, 'proportional')))
+age = 27
+height = 165
+weight = 70
+gender = 0
 
+start_time = time.time()
 
-MEKF_param = [Q_est, R_est, P0_est, grid_vector, eta0, design_param]
+with suppress_stdout_stderr():
+    results = perform_simulation([age, height, weight, gender],
+                                 'induction',
+                                 'MHE_NMPC',
+                                 NMPC_param,
+                                 mhe_param,
+                                 [False, True],
+                                 2)
 
-
-param = MEKF_param + [30, 30, 19 * np.diag([16, 1])]
-
-
-study_mhe = optuna.load_study(study_name="mhe_final_2", storage="sqlite:///Results_data/mhe.db")
-print(study_mhe.best_params)
-gamma = 0.105  # study_mhe.best_params['eta']
-theta = [gamma, 800, 100, 0.005]*4
-theta[4] = gamma/100
-theta[12] = gamma * 7.66
-theta[13] = 300
-theta[15] = 0.05
-
-Q_mhe = np.diag([1, 550, 550, 1, 1, 50, 750, 1])
-R_mhe = study_mhe.best_params['R']
-N_mhe = study_mhe.best_params['N_mhe']
-param_mhe = [Q_mhe, R_mhe, N_mhe, theta] + [30, 30, 256 * np.diag([4, 1])]
-
-param_ekf = [Q_est, R_est, P0_est, 30, 30, 434 * np.diag([4, 1])]
-
-parem_mekf_mhe = [Q_est, R_est, P0_est, grid_vector, eta0, design_param,
-                  Q_mhe, R_mhe, N_mhe, theta, 180, 30, 30, 38 * np.diag([4, 1])]
-
-param_PID = [0.032, 738, 9, 2, 0.06, 400, 5]
-phase = 'induction'
-control_type = 'MEKF-NMPC'
-if control_type == 'PID':
-    control_param = param_PID
-elif control_type == 'EKF-NMPC':
-    control_param = param_ekf
-elif control_type == 'MEKF-NMPC':
-    control_param = MEKF_param + [30, 30, 19 * np.diag([4, 1])]
-elif control_type == 'MHE-NMPC':
-    control_param = param_mhe
-elif control_type == 'MEKF-MHE-NMPC':
-    control_param = parem_mekf_mhe
-
-Patient_number = 171
-training_patient = np.random.randint(0, 500, size=3)
-
-
-def small_obj(i: int, param: list, output: str = 'IAE'):
-    np.random.seed(i)
-    # Generate random patient information with uniform distribution
-    age = np.random.randint(low=18, high=70)
-    height = np.random.randint(low=150, high=190)
-    weight = np.random.randint(low=50, high=100)
-    gender = np.random.randint(low=0, high=2)
-
-    start = time.perf_counter()
-    df_results = perform_simulation([age, height, weight, gender],
-                                    phase, control_type=control_type,
-                                    control_param=param, random_bool=[False, True])
-    end = time.perf_counter()
-    print(f" Time to perform {phase} phase : {end-start} s")
-    if output == 'IAE':
-        IAE = np.sum(np.abs(df_results['BIS'] - 50)*1)
-        return IAE
-    elif output == 'dataframe':
-        return df_results
-    else:
-        return
-
-
-local_cost = partial(small_obj, param=control_param, output='dataframe')
-
-start = time.perf_counter()
-# with mp.Pool(mp.cpu_count()-1) as p:
-#     r = list(p.map(local_cost, training_patient))
-df = small_obj(Patient_number, param=control_param, output='dataframe')
-
-end = time.perf_counter()
-# df = r[0]
-print(f" Time to perform {phase} phase : {end-start} s")
-print(f" Mean step time : {df['step_time'].mean()} s")
-plt.figure()
-plt.plot(df['Time'], df['BIS'])
-plt.plot(df['Time'], np.full(len(df['Time']), 50), '--')
+print(f"Simulation time: {time.time() - start_time:.2f} s")
+# # plot results
+plt.subplot(2, 1, 1)
+plt.plot(results['Time'], results['BIS'], label='BIS')
+plt.plot(results['Time'], results['BIS']*0 + 50, label='BIS target')
+plt.legend()
 plt.grid()
-plt.xlabel('Time [s]')
-plt.ylabel('BIS')
-plt.title(f"{control_type} control")
-plt.show()
 
-plt.figure()
-plt.plot(df['Time'], df['u_propo'], label='Propofol', color='b')
-# plt.plot(df['Time'], df['u_propo_target'], 'b--', label='target')
-plt.plot(df['Time'], df['u_remi'], label='Remifentanil', color='r')
-# plt.plot(df['Time'], df['u_remi_target'], 'r--', label='target')
+plt.subplot(2, 1, 2)
+plt.plot(results['Time'], results['u_propo'], label='propo')
+plt.plot(results['Time'], results['u_remi'], label='remi')
+plt.legend()
 plt.grid()
-plt.xlabel('Time [s]')
-plt.ylabel('Drug rate')
-plt.title(f"{control_type} control")
+
 plt.show()
