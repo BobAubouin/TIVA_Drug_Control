@@ -2,11 +2,7 @@
 *.svg
 *.pdf
 *.html
-Results_data/
-Results_Images/
-BIS_parameters.csv
-
-Patient_table.csv
+data/
 
 # python venv
 
@@ -16,8 +12,4 @@ Patient_table.csv
 
 OAR*
 
-# bash scripts
-
-*.sh
-
-astuce.py
+data/optuna/tuning.db
