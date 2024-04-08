@@ -21,13 +21,12 @@ cost_choice = 'IAE_biased'
 phase = 'induction'
 study_name = 'MHE_NMPC_1'
 patient_number = 500
-
+vmax = 1e4
+vmin = 0.01
 
 def study_mhe(trial):
     R_mhe = trial.suggest_float('R', 1e-5, 1e-1, log=True)
     N_mhe = trial.suggest_int('N_mhe', 20, 30)
-    vmax = 1e4
-    vmin = 0.1
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
     q = trial.suggest_float('q', 1e2, 1e6, log=True)
@@ -53,7 +52,7 @@ def study_mhe(trial):
     nb_cpu = min(mp.cpu_count()-1, len(training_patient))
     with mp.Pool(nb_cpu) as p:
         r = list(p.map(local_cost, training_patient))
-    return max(r)
+    return np.mean(r)
 
 
 # create the optuna study
@@ -63,27 +62,32 @@ study.optimize(study_mhe, n_trials=100, show_progress_bar=True)
 
 print(study.best_params)
 
+best_params = study.best_params
+best_params['vmax'] = vmax
+best_params['vmin'] = vmin
+
 # save the parameter of the sudy as json file
 dict = {'control_type': control_type,
         'cost_choice': cost_choice,
         'phase': phase,
         'filename': f'MHE_{phase}_{patient_number}',
-        'best_params': study.best_params}
+        'best_params': best_params}
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 
 
 # run the best parameter on the test set
-best_params = study.best_params
-best_params['ratio'] = 2
+
 
 control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc']}
 estim_param = load_mhe_param(
     vmax=best_params['vmax'],
+    vmin=best_params['vmin'],
     R=best_params['R'],
-    N_mhe=best_params['N_mhe'])
+    N_mhe=best_params['N_mhe'],
+    q=best_params['q'])
 
 
 start = time.time()
