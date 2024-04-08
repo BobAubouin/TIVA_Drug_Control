@@ -1,7 +1,9 @@
 import matplotlib.pyplot as plt
 import numpy as np
 import time
+import sys
 import os
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # nopep8
 
 
 from close_loop_anesth.loop import perform_simulation
@@ -49,7 +51,7 @@ mekf_param = load_mekf_param([5, 6, 6],
                              epsilon=0.8)
 
 mhe_param = load_mhe_param(R=0.1, N_mhe=30, vmax=1e4, q=1e3, vmin=0.1)
-
+NMPC_param['bool_non_linear'] = True
 age = 27
 height = 165
 weight = 70
@@ -57,15 +59,15 @@ gender = 0
 
 start_time = time.time()
 
-with suppress_stdout_stderr():
-    results = perform_simulation([age, height, weight, gender],
-                                 'induction',
-                                 'MHE_NMPC',
-                                 NMPC_param,
-                                 mhe_param,
-                                 [True, True],
-                                 2,
-                                 bool_noise=False)
+
+results = perform_simulation([age, height, weight, gender],
+                             'induction',
+                             'MHE_NMPC',
+                             NMPC_param,
+                             mhe_param,
+                             [True, True],
+                             2,
+                             bool_noise=False)
 
 print(f"Simulation time: {time.time() - start_time:.2f} s")
 # # plot results

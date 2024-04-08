@@ -37,17 +37,29 @@ class NMPC_integrator_multi_shooting:
             minimum value for the control inputs rates. The default is [-0.2, -0.4].
         bool_u_eq : bool, optional
             If True, the equilibrium input is computed at each step time. The default is False.
+        bool_non_linear : bool, optional
+            If True, the non-linear optimization problem is used. The default is False.
         Returns
         -------
         None.
         """
 
-    def __init__(self, A: list, B: list, BIS_param: list, ts: float = 1,
-                 N: int = 10, Nu: int = 10, R: list = np.diag([2, 1]),
-                 umax: list = [1e10]*2, umin: list = [0]*2,
-                 dumax: list = [1e10, 1e10], dumin: list = [-1e10, -1e10],
-                 bool_u_eq: bool = True):
+    def __init__(self,
+                 A: list,
+                 B: list,
+                 BIS_param: list,
+                 ts: float = 1,
+                 N: int = 10,
+                 Nu: int = 10,
+                 R: list = np.diag([2, 1]),
+                 umax: list = [1e10]*2,
+                 umin: list = [0]*2,
+                 dumax: list = [1e10, 1e10],
+                 dumin: list = [-1e10, -1e10],
+                 bool_u_eq: bool = True,
+                 bool_non_linear: bool = False) -> None:
         """Init NMPC class."""
+
         Ad, Bd = discretize(A, B, ts)
         self.BIS_param = BIS_param
 
@@ -60,11 +72,17 @@ class NMPC_integrator_multi_shooting:
         self.N = N  # horizon
         self.Nu = Nu  # control horizon
         self.bool_u_eq = bool_u_eq
+        self.bool_non_linear = bool_non_linear
+        if not bool_non_linear:
+            self.bool_u_eq = True
 
         # declare CASADI variables
         self.create_casadi_functions(Ad, Bd)
         # create the optimization problem
-        self.create_mpc_problem()
+        if bool_non_linear:
+            self.create_non_linear_mpc_problem()
+        else:
+            self.create_linear_mpc_problem()
         # create the equilibrium input problem
         self.create_equilibrium_input_problem(Ad, Bd)
 
@@ -101,7 +119,68 @@ class NMPC_integrator_multi_shooting:
 
         self.Output = cas.Function('Output', [x, constant_param], [bis], ['x', 'constant_param'], ['bis'])
 
-    def create_mpc_problem(self):
+    def create_non_linear_mpc_problem(self):
+       # Optimization problem definition, with multiple shooting
+        w = []
+        self.lbw = []
+        self.ubw = []
+        J = 0
+        # gu = []
+        # gbis = []
+        gx = []
+        # self.lbg_u = []
+        # self.ubg_u = []
+        # self.lbg_bis = []
+        # self.ubg_bis = []
+        self.lbg_x = []
+        self.ubg_x = []
+
+        X0 = cas.MX.sym('X0', 8)
+        Bis_target = cas.MX.sym('Bis_target')
+        # U_prec_true = cas.MX.sym('U_prec', 2)
+        constant_param = cas.MX.sym('constant_param', 4)
+        R = cas.MX.sym('R', 2)
+        ueq = cas.MX.sym('ueq', 2)
+        X = cas.MX.sym('X', 8 * self.N)
+        for k in range(self.N):
+            Xk_plus_1 = X[8*k:8*k+8]  # X_(k+1)
+            if k <= self.Nu-1:
+                U = cas.MX.sym('U', 2)
+                w += [U]
+                self.lbw += self.umin
+                self.ubw += self.umax
+            if k == 0:
+                X_k = X0
+                # U_prec = U_prec_true
+            else:
+                X_k = X[8*(k-1):8*(k-1)+8]
+                # U_prec = w[-2]
+
+            Pred = self.Pred(x=X_k, u=U)
+            Xk_plus_1_pred = Pred['x+']
+            Hk = self.Output(x=Xk_plus_1, constant_param=constant_param)
+            bis = Hk['bis']
+
+            J += (bis - Bis_target)**2 + (U-ueq).T @ cas.diag(R) @ (U - ueq)
+            # gu += [U-U_prec]
+            # gbis += [bis]
+            gx += [Xk_plus_1 - Xk_plus_1_pred]
+            # self.lbg_u += self.dumin
+            # self.ubg_u += self.dumax
+            # self.lbg_bis += [0]
+            # self.ubg_bis += [100]
+            self.lbg_x += [0]*8
+            self.ubg_x += [0]*8
+        w += [X]
+        self.lbw += [1e-3]*8*self.N
+        self.ubw += [1e10]*8*self.N
+
+        opts = {'ipopt.print_level': 0, 'print_time': 0, 'ipopt.max_iter': 300}
+        prob = {'f': J, 'p': cas.vertcat(*[X0, Bis_target, constant_param, R, ueq]),  # , U_prec_true
+                'x': cas.vertcat(*w), 'g': cas.vertcat(*(gx))}  # gu + gbis +
+        self.solver_mpc = cas.nlpsol('solver', 'ipopt', prob, opts)
+
+    def create_linear_mpc_problem(self):
         # Optimization problem definition, with multiple shooting
         w = []
         self.lbw = []
@@ -159,10 +238,10 @@ class NMPC_integrator_multi_shooting:
         self.lbw += [1e-3]*8*self.N
         self.ubw += [1e10]*8*self.N
 
-        opts = {'osqp.print_level': 0, 'print_time': 0}  # 'ipopt.max_iter': 300}
+        opts = {'osqp.verbose': 0}  # 'ipopt.max_iter': 300}
         prob = {'f': J, 'p': cas.vertcat(*[X0, xeq, constant_param, R, ueq]),  # , U_prec_true
                 'x': cas.vertcat(*w), 'g': cas.vertcat(*(gx))}  # gu + gbis +
-        self.solver_mpc = cas.qpsol('solver', 'osqp', prob)  # , opts)
+        self.solver_mpc = cas.qpsol('solver', 'osqp', prob, opts)
 
     def create_equilibrium_input_problem(self, Ad, Bd):
         simple_A = np.array([[Ad[0, 0], Ad[0, 3], 0, 0],
@@ -262,9 +341,14 @@ class NMPC_integrator_multi_shooting:
         else:
             ueq = [0]*2
         self.ueq = ueq
+
+        if self.bool_non_linear:
+            opt_param = list(x) + [Bis_target] + list(constant_param) + list(np.diag(self.R)) + list(ueq)
+        else:
+            opt_param = list(x) + self.xeq + list(constant_param) + list(np.diag(self.R)) + list(ueq)
+
         sol = self.solver_mpc(x0=w0,
-                              p=list(x) + self.xeq +  # + list(self.U_prec[0:2])
-                              list(constant_param) + list(np.diag(self.R)) + list(ueq),
+                              p=opt_param,
                               lbx=self.lbw,
                               ubx=self.ubw,
                               lbg=self.lbg_x,
