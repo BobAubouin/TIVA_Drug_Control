@@ -14,7 +14,7 @@ from close_loop_anesth.experiments import random_simu, training_patient
 # define the parameter of the sudy
 control_type = 'PID'
 cost_choice = 'IAE_biased'
-phase = 'total'
+phase = 'induction'
 study_name = 'PID_1'
 patient_number = 500
 
@@ -58,7 +58,8 @@ dict = {'control_type': control_type,
         'cost_choice': cost_choice,
         'phase': phase,
         'filename': f'PID_{phase}_{patient_number}',
-        'best_params': study.best_params}
+        'best_params': study.best_params,
+        'best_value': study.best_value,}
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 
