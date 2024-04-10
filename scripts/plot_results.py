@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # study to load
-study_name_list = ['PID_2', 'MHE_NMPC_3']
+study_name_list = ['PID_tot_IAE', 'MEKF_NMPC_IAE']
 
 results = []
 for study_name in study_name_list:
@@ -14,7 +14,7 @@ for study_name in study_name_list:
         dict = json.load(f)
 
     # load the results
-    filename = f'data/signals/{dict["filename"]}.csv'
+    filename = f'data/signals/{dict["filename"]}'
     results.append(pd.read_csv(filename))
 
 # plot the results
@@ -45,5 +45,8 @@ for i, result in enumerate(results):
 
 plt.legend()
 plt.grid()
+
+plt.tight_layout()
+plt.savefig(f"outputs/{''.join(study_name_list)}.pdf")
 
 plt.show()
