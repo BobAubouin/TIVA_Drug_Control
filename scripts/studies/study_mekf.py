@@ -17,20 +17,21 @@ from create_param import load_mekf_param
 
 # define the parameter of the sudy
 control_type = 'MEKF_NMPC'
-cost_choice = 'IAE_biased'
-phase = 'induction'
-study_name = 'MEKF_NMPC_test'
+cost_choice = 'IAE'
+phase = 'total'
+study_name = 'MEKF_NMPC_tot'
 patient_number = 500
 point_number = [5, 6, 6]
 bool_non_linear = True
+nb_of_step = 100
 
 
-def study_mhe(trial):
-    r = trial.suggest_float('R', 1e-5, 1e-1, log=True)
+def study_mekf(trial):
+    r = trial.suggest_float('R', 1e-3, 1e4, log=True)
     epsilon = trial.suggest_float('epsilon', 0.1, 0.99)
-    lambda_2 = trial.suggest_float('lambda_2', 1e-4, 1e-2, log=True)
+    lambda_2 = trial.suggest_float('lambda_2', 1e2, 1e2, log=True)
     alpha = trial.suggest_float('alpha', 1e-1, 100, log=True)
-    q = trial.suggest_float('q', 1e2, 1e6, log=True)
+    q = trial.suggest_float('q', 1e-3, 1e6, log=True)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
 
@@ -62,7 +63,11 @@ def study_mhe(trial):
 # create the optuna study
 study = optuna.create_study(direction='minimize', study_name=study_name,
                             storage='sqlite:///data/optuna/tuning.db', load_if_exists=True)
-study.optimize(study_mhe, n_trials=100, show_progress_bar=True)
+#get number of trials
+nb_trials = study.trials_dataframe().shape[0]
+nb_to_do = nb_of_step - nb_trials
+
+study.optimize(study_mekf, n_trials=nb_to_do, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -73,8 +78,10 @@ best_params['point_number'] = point_number
 dict = {'control_type': control_type,
         'cost_choice': cost_choice,
         'phase': phase,
-        'filename': f'MEKF_{phase}_{patient_number}',
-        'best_params': best_params}
+        'filename': f'{study_name}.csv',
+        'best_params': best_params,
+        'best_score': study.best_value,
+        'nb_of_step': nb_of_step,}
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 
@@ -112,6 +119,6 @@ print(f"Simulation time: {time.time() - start:.2f} s")
 # save the result of the test set
 print("Saving results...")
 final_df = pd.concat(res)
-final_df.to_csv(f"./data/signals/{dict['filename']}.csv")
+final_df.to_csv(f"./data/signals/{dict['filename']}")
 
 print("Done!")
