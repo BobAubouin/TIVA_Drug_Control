@@ -2,6 +2,7 @@
 *.svg
 *.pdf
 *.html
+
 data/
 
 # python venv
@@ -11,5 +12,3 @@ data/
 # OAR files
 
 OAR*
-
-data/optuna/tuning.db

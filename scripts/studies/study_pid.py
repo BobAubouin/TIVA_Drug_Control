@@ -13,10 +13,11 @@ from close_loop_anesth.experiments import random_simu, training_patient
 
 # define the parameter of the sudy
 control_type = 'PID'
-cost_choice = 'IAE_biased'
+cost_choice = 'IAE'
 phase = 'total'
-study_name = 'PID_1'
+study_name = 'PID_tot'
 patient_number = 500
+nb_of_step = 1000
 
 
 def study_pid(trial):
@@ -49,7 +50,11 @@ def study_pid(trial):
 # create the optuna study
 study = optuna.create_study(direction='minimize', study_name=study_name,
                             storage='sqlite:///data/optuna/tuning.db', load_if_exists=True)
-study.optimize(study_pid, n_trials=500, show_progress_bar=True)
+
+nb_trials = study.trials_dataframe().shape[0]
+nb_to_do = nb_of_step - nb_trials
+
+# study.optimize(study_pid, n_trials=nb_to_do, show_progress_bar=True)
 
 print(study.best_params)
 
@@ -57,8 +62,10 @@ print(study.best_params)
 dict = {'control_type': control_type,
         'cost_choice': cost_choice,
         'phase': phase,
-        'filename': f'PID_{phase}_{patient_number}',
-        'best_params': study.best_params}
+        'filename': f'{study_name}.csv',
+        'best_params': study.best_params,
+        'best_value': study.best_value,
+        'nb_of_step': nb_of_step,}
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 
@@ -83,6 +90,6 @@ print(f"Simulation time: {time.time() - start:.2f} s")
 # save the result of the test set
 print("Saving results...")
 final_df = pd.concat(res)
-final_df.to_csv(f"./data/signals/{dict['filename']}.csv")
+final_df.to_csv(f"./data/signals/{dict['filename']}")
 
 print("Done!")
