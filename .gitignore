@@ -5,6 +5,7 @@
 
 data/
 
+outputs/
 # python venv
 
 .env/
