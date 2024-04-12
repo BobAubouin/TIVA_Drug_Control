@@ -8,7 +8,9 @@ from python_anesthesia_simulator import metrics
 
 # study to load
 # ['PID_tot', 'MEKF_NMPC_tot', 'MHE_NMPC_tot_2']  # , 'MHE_NMPC_3', 'MEKF_NMPC_1']
-study_name_list = ['PID_tot_IAE', 'MEKF_NMPC_IAE']
+# ['PID_tot_IAE', 'MEKF_NMPC_IAE', 'MHE_NMPC_tot_IAE']
+study_name_list = ['PID_mixt', 'MEKF_mixt', 'MHE_mixt']
+
 
 results = []
 for study_name in study_name_list:

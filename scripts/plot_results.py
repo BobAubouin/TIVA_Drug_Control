@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 
 
 # study to load
-study_name_list = ['PID_tot_IAE', 'MEKF_NMPC_IAE']
+study_name_list = ['PID_mixt', 'MEKF_mixt', 'MHE_mixt']
 
 results = []
 for study_name in study_name_list:
