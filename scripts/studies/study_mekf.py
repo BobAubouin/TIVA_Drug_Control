@@ -16,9 +16,9 @@ from create_param import load_mekf_param
 
 # define the parameter of the sudy
 control_type = 'MEKF_NMPC'
-cost_choice = 'IAE'
+cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MEKF_NMPC_tot'
+study_name = 'MEKF_mixt'
 patient_number = 500
 point_number = [5, 6, 6]
 bool_non_linear = True
