@@ -1,1 +1,0 @@
-{"control_type": "MHE_NMPC", "cost_choice": "IAE_biased", "phase": "total", "filename": "MHE_total_500", "best_params": {"R": 0.025030578140525134, "N_mhe": 20, "vmax": 439.97143357451114, "N_mpc": 28, "R_mpc": 78.59064226122098, "q": 0.009018795668756779}}
