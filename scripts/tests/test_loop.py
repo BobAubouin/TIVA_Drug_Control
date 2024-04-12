@@ -11,6 +11,7 @@ from create_param import load_mekf_param, load_mhe_param
 
 
 NMPC_param = {'N': 60, 'Nu': 60, 'R': 0.1*np.diag([4, 1])}
+NMPC_param['bool_non_linear'] = True
 
 mekf_param = load_mekf_param([5, 6, 6],
                              q=10,
@@ -20,6 +21,20 @@ mekf_param = load_mekf_param([5, 6, 6],
                              epsilon=0.8)
 
 mhe_param = load_mhe_param(R=0.1, N_mhe=30, vmax=1e4, q=1e3, vmin=0.1)
+
+# rename dict keys
+mekf_param['R_mekf'] = mekf_param.pop('R')
+mekf_param['Q_mekf'] = mekf_param.pop('Q')
+mekf_param['P0_mekf'] = mekf_param.pop('P0')
+
+mhe_param['R_mhe'] = mhe_param.pop('R')
+mhe_param['Q_mhe'] = mhe_param.pop('Q')
+mhe_param['P_mhe'] = mhe_param.pop('P')
+
+# merge the two dicts
+estimate_param = {**mekf_param, **mhe_param}
+
+
 NMPC_param['bool_non_linear'] = True
 age = 27
 height = 165
@@ -31,9 +46,9 @@ start_time = time.time()
 
 results = perform_simulation([age, height, weight, gender],
                              'induction',
-                             'MHE_NMPC',
+                             'MEKF_MHE_NMPC',
                              NMPC_param,
-                             mhe_param,
+                             estimate_param,
                              [True, True],
                              2,
                              bool_noise=False)

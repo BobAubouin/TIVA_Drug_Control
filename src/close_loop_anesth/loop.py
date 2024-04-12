@@ -8,6 +8,7 @@ from close_loop_anesth.mpc import NMPC_integrator_multi_shooting
 from close_loop_anesth.ekf import EKF
 from close_loop_anesth.mekf import MEKF
 from close_loop_anesth.mhe import MHE
+from close_loop_anesth.mekf_mhe import MEKF_MHE
 
 
 def perform_simulation(Patient_info: list,
@@ -131,10 +132,9 @@ def perform_simulation(Patient_info: list,
         elif control_type == 'MHE_NMPC':
             estimator = MHE(**estim_param)
             controller = NMPC_integrator_multi_shooting(**control_param)
-        # elif control_type == 'MEKF-MHE_NMPC':
-        #     estimator = MHE(
-        #         A, B, BIS_param_nominal, A, B, ts=ts, mekf_param=control_param[0:6], mhe_param=control_param[6:10], switch_time=control_param[10])
-        #     controller = NMPC_integrator_multi_shooting(**control_param)
+        elif control_type == 'MEKF_MHE_NMPC':
+            estimator = MEKF_MHE(**estim_param)
+            controller = NMPC_integrator_multi_shooting(**control_param)
 
     # define dataframe to return
     line_list = []

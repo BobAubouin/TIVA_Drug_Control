@@ -8,6 +8,8 @@ from close_loop_anesth.utils import discretize
 class MHE:
     """Implementation of the Moving Horizon Estimator for the Coadministration of propof and remifentanil in Anesthesia.
 
+    x = [x1p, x2p, x3p, xep, x1r, x2r, x3r, xer, C50p, C50r, gamma, disturbance]
+
     Parameters
     ----------
     A : list
@@ -35,7 +37,8 @@ class MHE:
 
     """
 
-    def __init__(self, A: list,
+    def __init__(self,
+                 A: list,
                  B: list,
                  BIS_param: list,
                  ts: float = 1,
