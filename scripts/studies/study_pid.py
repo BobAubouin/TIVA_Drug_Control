@@ -13,9 +13,9 @@ from close_loop_anesth.experiments import random_simu, training_patient
 
 # define the parameter of the sudy
 control_type = 'PID'
-cost_choice = 'IAE'
+cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'PID_tot'
+study_name = 'PID_mixt'
 patient_number = 500
 nb_of_step = 1000
 
@@ -54,7 +54,7 @@ study = optuna.create_study(direction='minimize', study_name=study_name,
 nb_trials = study.trials_dataframe().shape[0]
 nb_to_do = nb_of_step - nb_trials
 
-# study.optimize(study_pid, n_trials=nb_to_do, show_progress_bar=True)
+study.optimize(study_pid, n_trials=nb_to_do, show_progress_bar=True)
 
 print(study.best_params)
 

@@ -17,9 +17,9 @@ from create_param import load_mhe_param
 
 # define the parameter of the sudy
 control_type = 'MHE_NMPC'
-cost_choice = 'IAE'
+cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MHE_NMPC_tot_IAE'
+study_name = 'MHE_mixt'
 patient_number = 500
 vmax = 1e4
 vmin = 0.01
