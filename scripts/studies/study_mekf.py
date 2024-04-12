@@ -6,7 +6,6 @@ import sys
 import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # nopep8
 
-
 import optuna
 import numpy as np
 import pandas as pd
@@ -63,7 +62,7 @@ def study_mekf(trial):
 # create the optuna study
 study = optuna.create_study(direction='minimize', study_name=study_name,
                             storage='sqlite:///data/optuna/tuning.db', load_if_exists=True)
-#get number of trials
+# get number of trials
 nb_trials = study.trials_dataframe().shape[0]
 nb_to_do = nb_of_step - nb_trials
 
@@ -81,7 +80,7 @@ dict = {'control_type': control_type,
         'filename': f'{study_name}.csv',
         'best_params': best_params,
         'best_score': study.best_value,
-        'nb_of_step': nb_of_step,}
+        'nb_of_step': nb_of_step, }
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 

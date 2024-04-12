@@ -12,38 +12,64 @@ import pandas as pd
 from tqdm import tqdm
 
 from close_loop_anesth.experiments import random_simu, training_patient
-from create_param import load_mhe_param
+from create_param import load_mekf_param, load_mhe_param
 
 # define the parameter of the sudy
-control_type = 'MHE_NMPC'
+control_type = 'MEKF_MHE_NMPC'
 cost_choice = 'IAE'
 phase = 'total'
-study_name = 'MHE_NMPC_tot_IAE'
-patient_number = 500
-vmax = 1e4
-vmin = 0.01
+study_name = 'MEKF_MHE_mixt_test'
+patient_number = 10
+mekf_param_study = 'MEKF_mixt'
+mhe_param_study = 'MHE_mixt'
 bool_non_linear = True
-nb_of_step = 100
+nb_of_step = 2
 
 
-def study_mhe(trial):
-    R_mhe = trial.suggest_float('R', 1e-5, 1e-1, log=True)
-    N_mhe = trial.suggest_int('N_mhe', 20, 30)
+# load mekf_param
+with open(f'data/logs/{mekf_param_study}.json', 'r') as f:
+    mekf_param = json.load(f).get('best_params')
+
+mekf_param = load_mekf_param(point_number=mekf_param['point_number'],
+                             q=mekf_param['q'],
+                             r=mekf_param['R'],
+                             alpha=mekf_param['alpha'],
+                             lambda_2=mekf_param['lambda_2'],
+                             epsilon=mekf_param['epsilon'])
+
+# load mhe_param
+with open(f'data/logs/{mhe_param_study}.json', 'r') as f:
+    mhe_param = json.load(f).get('best_params')
+
+mhe_param = load_mhe_param(vmax=mhe_param['vmax'],
+                           vmin=mhe_param['vmin'],
+                           R=mhe_param['R'],
+                           N_mhe=mhe_param['N_mhe'],
+                           q=mhe_param['q'])
+
+# rename dictionary key
+mekf_param['R_mekf'] = mekf_param.pop('R')
+mekf_param['Q_mekf'] = mekf_param.pop('Q')
+mekf_param['P0_mekf'] = mekf_param.pop('P0')
+
+mhe_param['R_mhe'] = mhe_param.pop('R')
+mhe_param['Q_mhe'] = mhe_param.pop('Q')
+mhe_param['P_mhe'] = mhe_param.pop('P')
+
+estim_param = {**mekf_param, **mhe_param}
+
+
+def study_mekf_mhe(trial):
+    switch_time = trial.suggest_int('switch_time', 1, 600)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
-    R_mpc = trial.suggest_float('R_mpc', 1e-1, 100, log=True)
-    q = trial.suggest_float('q', 1e2, 1e6, log=True)
+    R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
                      'Nu': N_mpc,
                      'bool_non_linear': bool_non_linear}
 
-    estim_param = load_mhe_param(
-        vmax=vmax,
-        vmin=vmin,
-        R=R_mhe,
-        N_mhe=N_mhe,
-        q=q)
+    estim_param['switch_time'] = switch_time
 
     local_cost = partial(random_simu,
                          control_type=control_type,
@@ -61,24 +87,24 @@ def study_mhe(trial):
 # create the optuna study
 study = optuna.create_study(direction='minimize', study_name=study_name,
                             storage='sqlite:///data/optuna/tuning.db', load_if_exists=True)
-nb_to_do = nb_of_step - study.trials_dataframe().shape[0]
-
-study.optimize(study_mhe, n_trials=nb_to_do, show_progress_bar=True)
+# get number of trials
+nb_trials = study.trials_dataframe().shape[0]
+nb_to_do = nb_of_step - nb_trials
+study.optimize(study_mekf_mhe, n_trials=nb_to_do, show_progress_bar=True)
 
 print(study.best_params)
 
 best_params = study.best_params
-best_params['vmax'] = vmax
-best_params['vmin'] = vmin
-best_params['bool_non_linear'] = bool_non_linear
 
 # save the parameter of the sudy as json file
 dict = {'control_type': control_type,
         'cost_choice': cost_choice,
         'phase': phase,
         'filename': f'{study_name}.csv',
+        'mekf_param_study': mekf_param_study,
+        'mhe_param': mhe_param_study,
         'best_params': best_params,
-        'best_value': study.best_value,
+        'best_score': study.best_value,
         'nb_of_step': nb_of_step, }
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
@@ -91,12 +117,9 @@ control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
                  'bool_non_linear': bool_non_linear}
-estim_param = load_mhe_param(
-    vmax=best_params['vmax'],
-    vmin=best_params['vmin'],
-    R=best_params['R'],
-    N_mhe=best_params['N_mhe'],
-    q=best_params['q'])
+
+estim_param = {**mekf_param, **mhe_param}
+estim_param['switch_time'] = best_params['switch_time']
 
 
 start = time.time()
@@ -107,9 +130,10 @@ test_func = partial(random_simu,
                     output='dataframe',
                     phase=phase,
                     cost_choice=cost_choice)
+
 patient_list = np.arange(patient_number)
 with mp.Pool(mp.cpu_count()-1) as p:
-    res = list(tqdm(p.imap(test_func, patient_list), total=len(patient_list), desc='Test MHE'))
+    res = list(tqdm(p.imap(test_func, patient_list), total=len(patient_list), desc='Test MEKF-MHE'))
 
 print(f"Simulation time: {time.time() - start:.2f} s")
 # save the result of the test set

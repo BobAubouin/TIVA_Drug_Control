@@ -33,7 +33,7 @@ mhe_param['P_mhe'] = mhe_param.pop('P')
 
 # merge the two dicts
 estimate_param = {**mekf_param, **mhe_param}
-
+estimate_param['switch_time'] = 180
 
 NMPC_param['bool_non_linear'] = True
 age = 27
