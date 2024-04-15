@@ -36,7 +36,11 @@ def study_mhe(trial):
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
                      'Nu': N_mpc,
-                     'bool_non_linear': bool_non_linear}
+                     'bool_non_linear': bool_non_linear, }
+
+    if not bool_non_linear:
+        terminal_factor = trial.suggest_float('terminal_factor', 1e-1, 1e3, log=True)
+        control_param['terminal_factor'] = terminal_factor
 
     estim_param = load_mhe_param(
         vmax=vmax,
@@ -72,6 +76,7 @@ best_params['vmax'] = vmax
 best_params['vmin'] = vmin
 best_params['bool_non_linear'] = bool_non_linear
 
+
 # save the parameter of the sudy as json file
 dict = {'control_type': control_type,
         'cost_choice': cost_choice,
@@ -91,6 +96,10 @@ control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
                  'bool_non_linear': bool_non_linear}
+
+if not bool_non_linear:
+    control_param['terminal_factor'] = best_params['terminal_factor']
+
 estim_param = load_mhe_param(
     vmax=best_params['vmax'],
     vmin=best_params['vmin'],

@@ -7,6 +7,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), '..'))  # nopep8
 
 
 from close_loop_anesth.loop import perform_simulation
+from close_loop_anesth.experiments import auto_tune_pid
 from create_param import load_mekf_param, load_mhe_param
 
 
@@ -41,13 +42,15 @@ height = 165
 weight = 70
 gender = 0
 
+pid_param = {'ratio': 2, 'auto_tune': True, 'cost_choice': 'IAE_biased_normal'}
+
 start_time = time.time()
 
 
 results = perform_simulation([age, height, weight, gender],
-                             'induction',
-                             'MEKF_MHE_NMPC',
-                             NMPC_param,
+                             'total',
+                             'PID',
+                             pid_param,
                              estimate_param,
                              [True, True],
                              2,

@@ -57,7 +57,8 @@ class NMPC_integrator_multi_shooting:
                  dumax: list = [1e10, 1e10],
                  dumin: list = [-1e10, -1e10],
                  bool_u_eq: bool = True,
-                 bool_non_linear: bool = False) -> None:
+                 bool_non_linear: bool = False,
+                 terminal_cost_factor: float = 10,) -> None:
         """Init NMPC class."""
 
         Ad, Bd = discretize(A, B, ts)
@@ -69,6 +70,7 @@ class NMPC_integrator_multi_shooting:
         self.dumax = dumax
         self.R = R  # control cost
         self.Q = cas.MX(np.diag([0, 0, 0, 1, 0, 0, 0, 1]))  # state cost
+        self.P = self.Q*terminal_cost_factor  # terminal cost
         self.N = N  # horizon
         self.Nu = Nu  # control horizon
         self.bool_u_eq = bool_u_eq
@@ -234,6 +236,8 @@ class NMPC_integrator_multi_shooting:
             # self.ubg_bis += [100]
             self.lbg_x += [0]*8
             self.ubg_x += [0]*8
+
+        J += (Xk_plus_1 - xeq).T @ self.P @ (Xk_plus_1 - xeq)
         w += [X]
         self.lbw += [1e-3]*8*self.N
         self.ubw += [1e10]*8*self.N
