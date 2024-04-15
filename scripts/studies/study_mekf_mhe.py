@@ -16,14 +16,14 @@ from create_param import load_mekf_param, load_mhe_param
 
 # define the parameter of the sudy
 control_type = 'MEKF_MHE_NMPC'
-cost_choice = 'IAE'
+cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MEKF_MHE_mixt_test'
-patient_number = 10
+study_name = 'MEKF_MHE_mixt'
+patient_number = 500
 mekf_param_study = 'MEKF_mixt'
 mhe_param_study = 'MHE_mixt'
 bool_non_linear = True
-nb_of_step = 2
+nb_of_step = 100
 
 
 # load mekf_param
