@@ -3,6 +3,7 @@ import os
 
 import numpy as np
 import casadi as cas
+from scipy.linalg import solve_continuous_are
 from close_loop_anesth.utils import discretize
 
 
@@ -69,8 +70,11 @@ class NMPC_integrator_multi_shooting:
         self.dumin = dumin
         self.dumax = dumax
         self.R = R  # control cost
-        self.Q = cas.MX(np.diag([0, 0, 0, 1, 0, 0, 0, 1]))  # state cost
-        self.P = self.Q*terminal_cost_factor  # terminal cost
+        self.Q = np.diag([0, 0, 0, 4, 0, 0, 0, 1])  # state cost
+        self.P = solve_continuous_are(A, B, self.Q, self.R)
+        self.Q = cas.MX(self.Q)
+        self.P = cas.MX(self.P)
+        # self.Q*terminal_cost_factor  # terminal cost
         self.N = N  # horizon
         self.Nu = Nu  # control horizon
         self.bool_u_eq = bool_u_eq
@@ -399,7 +403,9 @@ class NMPC_integrator_multi_shooting:
                                 lbg=[0],
                                 ubg=[0])
         vect_sol = sol['x'].full().flatten()
+        # print(sol['f'].full().flatten())
         ueq = vect_sol[0:2]
+        # print(ueq)
         self.xeq_simple = vect_sol[2:]
         self.xeq = [self.xeq_simple[0],
                     x_k[1],
@@ -409,4 +415,5 @@ class NMPC_integrator_multi_shooting:
                     x_k[5],
                     x_k[6],
                     self.xeq_simple[3]]
+        # print(self.xeq - self.Pred(x=self.xeq, u=ueq)['x+'].full().flatten())
         return ueq

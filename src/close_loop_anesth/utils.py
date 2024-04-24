@@ -99,3 +99,27 @@ def compute_bis(xep: float, xer: float, Bis_param: list) -> float:
     i = (up + ur)/U_50
     BIS = E0 - Emax * i ** gamma / (1 + i ** gamma)
     return BIS
+
+
+def custom_disturbance(time: float):
+    bis_dist = [[0, 0],
+                [600, 0],
+                [600.1, 20],
+                [650, 20],
+                [650.1, 10],
+                [700, 10],
+                [700.1, 20],
+                [750, 20],
+                [750.1, 10],
+                [800, 10],
+                [800.1, 5],
+                [850, 5],
+                [850.1, 0],
+                [900, 0],
+                [900.1, 10],
+                [925, 10],
+                [925.1, 0],
+                [950, 0],]
+
+    dist = np.interp(time, [x[0] for x in bis_dist], [x[1] for x in bis_dist])
+    return [dist, 0, 0]

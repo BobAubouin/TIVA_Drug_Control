@@ -28,15 +28,18 @@ mekf_param['R_mekf'] = mekf_param.pop('R')
 mekf_param['Q_mekf'] = mekf_param.pop('Q')
 mekf_param['P0_mekf'] = mekf_param.pop('P0')
 
-mhe_param['R_mhe'] = mhe_param.pop('R')
-mhe_param['Q_mhe'] = mhe_param.pop('Q')
-mhe_param['P_mhe'] = mhe_param.pop('P')
+# mhe_param['R_mhe'] = mhe_param.pop('R')
+# mhe_param['Q_mhe'] = mhe_param.pop('Q')
+# mhe_param['P_mhe'] = mhe_param.pop('P')
 
 # merge the two dicts
 estimate_param = {**mekf_param, **mhe_param}
 estimate_param['switch_time'] = 180
 
 NMPC_param['bool_non_linear'] = True
+NMPC_param['terminal_cost_factor'] = 20
+
+
 age = 27
 height = 165
 weight = 70
@@ -49,9 +52,9 @@ start_time = time.time()
 
 results = perform_simulation([age, height, weight, gender],
                              'total',
-                             'PID',
-                             pid_param,
-                             estimate_param,
+                             'MHE_NMPC',
+                             NMPC_param,
+                             mhe_param,
                              [True, True],
                              2,
                              bool_noise=False)
@@ -71,3 +74,8 @@ plt.legend()
 plt.grid()
 
 plt.show()
+
+# plot states
+x = np.array(results['x'])
+for i in range(8):
+    plt.plot(results['Time'], x[i, :], label=f'x{i}')

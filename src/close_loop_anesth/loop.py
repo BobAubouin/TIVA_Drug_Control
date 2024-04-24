@@ -9,6 +9,7 @@ from close_loop_anesth.ekf import EKF
 from close_loop_anesth.mekf import MEKF
 from close_loop_anesth.mhe import MHE
 from close_loop_anesth.mekf_mhe import MEKF_MHE
+from close_loop_anesth.utils import custom_disturbance
 
 
 def perform_simulation(Patient_info: list,
@@ -140,7 +141,7 @@ def perform_simulation(Patient_info: list,
     line_list = []
     u_propo, u_remi = 0, 0
     if phase == 'induction':
-        N_simu = 10*60//sampling_time
+        N_simu = 30*60//sampling_time
     else:
         N_simu = 20*60//sampling_time
 
@@ -148,7 +149,8 @@ def perform_simulation(Patient_info: list,
         if phase == 'induction':
             disturbance = [0, 0, 0]
         else:
-            disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
+            # disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
+            disturbance = custom_disturbance(i*sampling_time)
             if i*sampling_time == 9*60 and control_type == 'PID':
                 controller.change_param(**control_param_maintenance)
 
@@ -167,8 +169,9 @@ def perform_simulation(Patient_info: list,
                 x_estimated = np.concatenate((x_estimated[:-1], BIS_param_nominal[:3], [x_estimated[-1]]))
             u_propo, u_remi = controller.one_step(x_estimated, bis_target)
         end = perf_counter()
-        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start]],
-                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time'])
+        x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))
+        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x]],
+                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x'])
         line_list.append(line)
 
         # if control_type == 'MHE_NMPC':
