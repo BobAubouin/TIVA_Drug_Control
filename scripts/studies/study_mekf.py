@@ -18,11 +18,11 @@ from create_param import load_mekf_param
 control_type = 'MEKF_NMPC'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MEKF_mixt'
+study_name = 'MEKF_R_maint'
 patient_number = 500
 point_number = [5, 6, 6]
 bool_non_linear = True
-nb_of_step = 100
+nb_of_step = 200
 
 
 def study_mekf(trial):
@@ -33,11 +33,13 @@ def study_mekf(trial):
     q = trial.suggest_float('q', 1e-3, 1e6, log=True)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
+    R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e3, log=True)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
                      'Nu': N_mpc,
-                     'bool_non_linear': bool_non_linear}
+                     'bool_non_linear': bool_non_linear,
+                     'R_maintenance': R_maintenance}
 
     estim_param = load_mekf_param(point_number=point_number,
                                   q=q,
@@ -91,7 +93,8 @@ with open(f'data/logs/{study_name}.json', 'w') as f:
 control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
-                 'bool_non_linear': bool_non_linear}
+                 'bool_non_linear': bool_non_linear,
+                 'R_maintenance': best_params['R_maintenance']}
 
 estim_param = load_mekf_param(point_number=point_number,
                               q=best_params['q'],

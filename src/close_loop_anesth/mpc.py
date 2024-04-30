@@ -40,6 +40,8 @@ class NMPC_integrator_multi_shooting:
             If True, the equilibrium input is computed at each step time. The default is False.
         bool_non_linear : bool, optional
             If True, the non-linear optimization problem is used. The default is False.
+        terminal_cost_factor : float, optional
+            Factor of the terminal cost. The default is 10.
         Returns
         -------
         None.

@@ -18,12 +18,12 @@ from create_param import load_mhe_param
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MHE_mixt'
+study_name = 'MHE_R_maint'
 patient_number = 500
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True
-nb_of_step = 100
+nb_of_step = 200
 
 
 def study_mhe(trial):
@@ -31,16 +31,18 @@ def study_mhe(trial):
     N_mhe = trial.suggest_int('N_mhe', 20, 30)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-1, 100, log=True)
+    R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e3, log=True)
     q = trial.suggest_float('q', 1e2, 1e6, log=True)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
                      'Nu': N_mpc,
-                     'bool_non_linear': bool_non_linear, }
+                     'bool_non_linear': bool_non_linear,
+                     'R_maintenance': R_maintenance}
 
     if not bool_non_linear:
-        terminal_factor = trial.suggest_float('terminal_factor', 1e-1, 1e3, log=True)
-        control_param['terminal_factor'] = terminal_factor
+        terminal_factor = trial.suggest_float('terminal_cost_factor', 1e-1, 1e3, log=True)
+        control_param['terminal_cost_factor'] = terminal_factor
 
     estim_param = load_mhe_param(
         vmax=vmax,
@@ -95,10 +97,11 @@ with open(f'data/logs/{study_name}.json', 'w') as f:
 control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
-                 'bool_non_linear': bool_non_linear}
+                 'bool_non_linear': bool_non_linear,
+                 'R_maintenance': best_params['R_maintenance']}
 
 if not bool_non_linear:
-    control_param['terminal_factor'] = best_params['terminal_factor']
+    control_param['terminal_cost_factor'] = best_params['terminal_cost_factor']
 
 estim_param = load_mhe_param(
     vmax=best_params['vmax'],

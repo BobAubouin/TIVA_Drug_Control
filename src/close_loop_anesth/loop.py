@@ -113,6 +113,11 @@ def perform_simulation(Patient_info: list,
         control_param['umax'] = [up_max, ur_max]
         control_param['umin'] = [0, 0]
         control_param['bool_u_eq'] = True
+        if 'R_maintenance' in control_param.keys():
+            R_maintenance = control_param['R_maintenance']
+            control_param.pop('R_maintenance')
+        else:
+            R_maintenance = None
 
         A_int = np.block([[Ap, np.zeros((4, 5))], [np.zeros((4, 4)), Ar, np.zeros((4, 1))], [np.zeros((1, 9))]])
         B_int = np.block([[Bp, np.zeros((4, 1))], [np.zeros((4, 1)), Br], [0, 0]])
@@ -136,6 +141,7 @@ def perform_simulation(Patient_info: list,
         elif control_type == 'MEKF_MHE_NMPC':
             estimator = MEKF_MHE(**estim_param)
             controller = NMPC_integrator_multi_shooting(**control_param)
+        R_mpc = control_param['R']
 
     # define dataframe to return
     line_list = []
@@ -151,8 +157,11 @@ def perform_simulation(Patient_info: list,
         else:
             # disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
             disturbance = custom_disturbance(i*sampling_time)
-            if i*sampling_time == 9*60 and control_type == 'PID':
-                controller.change_param(**control_param_maintenance)
+            if i*sampling_time == 9*60:
+                if control_type == 'PID':
+                    controller.change_param(**control_param_maintenance)
+                elif R_maintenance is not None:
+                    R_mpc = R_maintenance
 
         bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=bool_noise, dist=disturbance)
 
@@ -167,7 +176,7 @@ def perform_simulation(Patient_info: list,
             x_estimated, _ = estimator.one_step([u_propo, u_remi], bis[0])
             if control_type == 'EKF_NMPC':
                 x_estimated = np.concatenate((x_estimated[:-1], BIS_param_nominal[:3], [x_estimated[-1]]))
-            u_propo, u_remi = controller.one_step(x_estimated, bis_target)
+            u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
         end = perf_counter()
         x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))
         line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x]],
