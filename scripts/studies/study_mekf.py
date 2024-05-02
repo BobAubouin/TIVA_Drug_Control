@@ -18,8 +18,8 @@ from create_param import load_mekf_param
 control_type = 'MEKF_NMPC'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MEKF_R_maint'
-patient_number = 500
+study_name = 'MEKF_1000'
+patient_number = 1000
 point_number = [5, 6, 6]
 bool_non_linear = True
 nb_of_step = 200
@@ -28,7 +28,7 @@ nb_of_step = 200
 def study_mekf(trial):
     r = trial.suggest_float('R', 1e-3, 1e4, log=True)
     epsilon = trial.suggest_float('epsilon', 0.1, 0.99)
-    lambda_2 = trial.suggest_float('lambda_2', 1e2, 1e2, log=True)
+    lambda_2 = trial.suggest_float('lambda_2', 1e1, 1e3, log=True)
     alpha = trial.suggest_float('alpha', 1e-1, 100, log=True)
     q = trial.suggest_float('q', 1e-3, 1e6, log=True)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
@@ -39,7 +39,7 @@ def study_mekf(trial):
                      'N': N_mpc,
                      'Nu': N_mpc,
                      'bool_non_linear': bool_non_linear,
-                     'R_maintenance': R_maintenance}
+                     'R_maintenance': R_maintenance*np.diag([4, 1])}
 
     estim_param = load_mekf_param(point_number=point_number,
                                   q=q,
@@ -55,7 +55,7 @@ def study_mekf(trial):
                          output='cost',
                          phase=phase,
                          cost_choice=cost_choice)
-    nb_cpu = min(mp.cpu_count()-1, len(training_patient))
+    nb_cpu = min(mp.cpu_count(), len(training_patient))
     with mp.Pool(nb_cpu) as p:
         r = list(p.map(local_cost, training_patient))
     return np.mean(r)
@@ -94,7 +94,7 @@ control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
                  'bool_non_linear': bool_non_linear,
-                 'R_maintenance': best_params['R_maintenance']}
+                 'R_maintenance': best_params['R_maintenance']*np.diag([4, 1])}
 
 estim_param = load_mekf_param(point_number=point_number,
                               q=best_params['q'],
@@ -114,7 +114,7 @@ test_func = partial(random_simu,
                     cost_choice=cost_choice)
 
 patient_list = np.arange(patient_number)
-with mp.Pool(mp.cpu_count()-1) as p:
+with mp.Pool(mp.cpu_count()) as p:
     res = list(tqdm(p.imap(test_func, patient_list), total=len(patient_list), desc='Test MEKF'))
 
 print(f"Simulation time: {time.time() - start:.2f} s")

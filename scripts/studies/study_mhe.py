@@ -18,8 +18,8 @@ from create_param import load_mhe_param
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MHE_R_maint'
-patient_number = 500
+study_name = 'MHE_1000'
+patient_number = 1000
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True
@@ -28,8 +28,8 @@ nb_of_step = 200
 
 def study_mhe(trial):
     R_mhe = trial.suggest_float('R', 1e-5, 1e-1, log=True)
-    N_mhe = trial.suggest_int('N_mhe', 20, 30)
-    N_mpc = trial.suggest_int('N_mpc', 20, 80)
+    N_mhe = trial.suggest_int('N_mhe', 10, 30)
+    N_mpc = trial.suggest_int('N_mpc', 10, 80)
     R_mpc = trial.suggest_float('R_mpc', 1e-1, 100, log=True)
     R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e3, log=True)
     q = trial.suggest_float('q', 1e2, 1e6, log=True)
@@ -38,7 +38,7 @@ def study_mhe(trial):
                      'N': N_mpc,
                      'Nu': N_mpc,
                      'bool_non_linear': bool_non_linear,
-                     'R_maintenance': R_maintenance}
+                     'R_maintenance': R_maintenance*np.diag([4, 1])}
 
     if not bool_non_linear:
         terminal_factor = trial.suggest_float('terminal_cost_factor', 1e-1, 1e3, log=True)
@@ -58,7 +58,7 @@ def study_mhe(trial):
                          output='cost',
                          phase=phase,
                          cost_choice=cost_choice)
-    nb_cpu = min(mp.cpu_count()-1, len(training_patient))
+    nb_cpu = min(mp.cpu_count(), len(training_patient))
     with mp.Pool(nb_cpu) as p:
         r = list(p.map(local_cost, training_patient))
     return np.mean(r)
@@ -98,7 +98,7 @@ control_param = {'R': best_params['R_mpc']*np.diag([4, 1]),
                  'N': best_params['N_mpc'],
                  'Nu': best_params['N_mpc'],
                  'bool_non_linear': bool_non_linear,
-                 'R_maintenance': best_params['R_maintenance']}
+                 'R_maintenance': best_params['R_maintenance']*np.diag([4, 1])}
 
 if not bool_non_linear:
     control_param['terminal_cost_factor'] = best_params['terminal_cost_factor']
@@ -120,7 +120,7 @@ test_func = partial(random_simu,
                     phase=phase,
                     cost_choice=cost_choice)
 patient_list = np.arange(patient_number)
-with mp.Pool(mp.cpu_count()-1) as p:
+with mp.Pool(mp.cpu_count()) as p:
     res = list(tqdm(p.imap(test_func, patient_list), total=len(patient_list), desc='Test MHE'))
 
 print(f"Simulation time: {time.time() - start:.2f} s")

@@ -8,7 +8,7 @@ import os
 from close_loop_anesth.loop import perform_simulation
 
 np.random.seed(0)
-training_patient = np.random.randint(0, 500, size=16)
+training_patient = np.random.randint(1000, 1500, size=32)
 
 
 def compute_cost(df: pd.DataFrame, type: str) -> float:
