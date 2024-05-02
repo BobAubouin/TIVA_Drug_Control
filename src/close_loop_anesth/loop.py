@@ -59,7 +59,7 @@ def perform_simulation(Patient_info: list,
         Dataframe with the results of the simulation.l
     """
     # define sampling time
-    control_param['ts'] = sampling_time*2
+    control_param['ts'] = sampling_time
 
     patient_simu = pas.Patient(Patient_info, save_data_bool=False,
                                random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=sampling_time)
@@ -157,7 +157,7 @@ def perform_simulation(Patient_info: list,
         else:
             # disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
             disturbance = custom_disturbance(i*sampling_time)
-            if i*sampling_time == 9*60:
+            if i*sampling_time == 9*60 + 58:
                 if control_type == 'PID':
                     controller.change_param(**control_param_maintenance)
                 elif R_maintenance is not None:

@@ -62,12 +62,17 @@ def random_simu(caseid: int,
     weight = np.random.randint(low=50, high=100)
     gender = np.random.randint(low=0, high=2)
 
+    if control_type == 'PID':
+        ts = 1
+    else:
+        ts = 2
     df_results = perform_simulation([age, height, weight, gender],
                                     phase,
                                     control_type=control_type,
                                     control_param=control_param,
                                     estim_param=estim_param,
-                                    random_bool=[True, True])
+                                    random_bool=[True, True],
+                                    sampling_time=ts)
     if output == 'cost':
         cost = compute_cost(df_results, cost_choice)
         return cost

@@ -15,7 +15,7 @@ from close_loop_anesth.experiments import random_simu, training_patient
 control_type = 'PID'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'PID_1000'
+study_name = 'PID_1000_2'
 patient_number = 1000
 nb_of_step = 1000
 

@@ -18,12 +18,12 @@ from create_param import load_mhe_param
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_normal'
 phase = 'total'
-study_name = 'MHE_1000'
+study_name = 'MHE_1000_2'
 patient_number = 1000
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True
-nb_of_step = 200
+nb_of_step = 100
 
 
 def study_mhe(trial):
