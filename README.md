@@ -13,14 +13,22 @@ In this paper, a PID controller is compared to an extended moving horizon estima
 Install all the required packages with the command:
 
 ```
-pip install -r requirement.txt
+pip install .
 ```
 
 ## Usage
 
-Launch tunning and simulation scripts in the dedicated folder. To visualize the result of the simulation script run *read_simulation_results.py*.
+# Reproduce the results
+Launch each study located in the scripts/studies folder. 
 
-**Caution:** The simulation scripts may take time to run (approx 1h30 on my PC for the MMPC).
+**Caution:** The simulation scripts may take time to run (approx 5h on a 32 thread server for the MPC ones).
+
+The results can be found in the plot results notebook.
+
+# Use the package
+
+The package can be used to simulate the anesthesia induction phase with the MPC and PID controllers. 
+A simple example is given in the test notebook, for more in depth change the files of the package can be modified.
 
 ## Authors
 
