@@ -26,11 +26,13 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
     float
         cost of the simulation.
     """
+    ts = df['Time'].iloc[1] - df['Time'].iloc[0]
+
     if type == 'IAE':
-        cost = np.sum((df['BIS'] - 50)**2, axis=0)
+        cost = np.sum((df['BIS'] - 50)**2, axis=0) * ts
     elif type == 'IAE_biased':
         mask = df['BIS'] > 50
-        cost = np.sum((df['BIS'] - 50)**3 * mask + (df['BIS'] - 50)**4 * (~mask), axis=0)
+        cost = (np.sum((df['BIS'] - 50)**3 * mask + (df['BIS'] - 50)**4 * (~mask), axis=0)) * ts
     elif type == 'IAE_biased_normal':
         TIME_MAINTENANCE = 599
         bis_induction = df[df.Time < TIME_MAINTENANCE].BIS
@@ -39,7 +41,7 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
         biased_cost = np.sum((bis_induction - 50)**3 * mask_induction +
                              (bis_induction - 50)**4 * (~mask_induction), axis=0)
         normal_cost = np.sum((bis_maintenance - 50)**4, axis=0)
-        cost = biased_cost + normal_cost
+        cost = (biased_cost + normal_cost) * ts
     elif type == 'TT':
         for i in range(len(df['BIS'])):
             if df['BIS'].iloc[i] < 60:
