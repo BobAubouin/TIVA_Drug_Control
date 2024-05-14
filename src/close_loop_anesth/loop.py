@@ -34,12 +34,12 @@ def perform_simulation(Patient_info: list,
     control_type : str
         can be 'PID', MEKF_NMPC', 'EKF_NMPC', 'MHE_NMPC'
     control_param : dict
-        dict of control parameter specific for each control type: 
+        dict of control parameter specific for each control type:
         - for PID [K, Ti, Td, ratio, K_2, Ti_2, Td_2], where _2 is used during maintenance.
         - for NMPC [N, Nu, R_nmpc]
 
     estim_param : dict
-        dict of estimator parameter specific for each control type: 
+        dict of estimator parameter specific for each control type:
         - for PID [None]
         - for EKF_NMPC [Q, R, P0]
         - for MEKF_NMPC [Q, R, P0, grid_vector, eta0, lambda_1, lambda_2, nu, epsilon]
@@ -155,8 +155,8 @@ def perform_simulation(Patient_info: list,
         if phase == 'induction':
             disturbance = [0, 0, 0]
         else:
-            # disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
-            disturbance = custom_disturbance(i*sampling_time)
+            disturbance = pas.compute_disturbances(i*sampling_time, 'step', start_step=10*60, end_step=15*60)
+            # disturbance = custom_disturbance(i*sampling_time)
             if i*sampling_time == 9*60 + 58:
                 if control_type == 'PID':
                     controller.change_param(**control_param_maintenance)
@@ -179,8 +179,8 @@ def perform_simulation(Patient_info: list,
             u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
         end = perf_counter()
         x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))
-        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x]],
-                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x'])
+        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x, Patient_info[2]]],
+                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x', 'weight'])
         line_list.append(line)
 
         # if control_type == 'MHE_NMPC':

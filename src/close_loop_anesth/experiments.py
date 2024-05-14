@@ -42,6 +42,15 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
                              (bis_induction - 50)**4 * (~mask_induction), axis=0)
         normal_cost = np.sum((bis_maintenance - 50)**4, axis=0)
         cost = (biased_cost + normal_cost) * ts
+    elif type == 'IAE_biased_40_normal':
+        TIME_MAINTENANCE = 599
+        bis_induction = df[df.Time < TIME_MAINTENANCE].BIS
+        bis_maintenance = df[df.Time >= TIME_MAINTENANCE].BIS
+        mask_induction = bis_induction > 40
+        biased_cost = np.sum((bis_induction - 50)**2 * mask_induction +
+                             (50-bis_induction)**3 * (~mask_induction), axis=0)
+        normal_cost = np.sum((bis_maintenance - 50)**2, axis=0)
+        cost = (biased_cost + normal_cost) * ts
     elif type == 'TT':
         for i in range(len(df['BIS'])):
             if df['BIS'].iloc[i] < 60:
@@ -65,7 +74,7 @@ def random_simu(caseid: int,
     gender = np.random.randint(low=0, high=2)
 
     if control_type == 'PID':
-        ts = 1
+        ts = 2
     else:
         ts = 2
     df_results = perform_simulation([age, height, weight, gender],
