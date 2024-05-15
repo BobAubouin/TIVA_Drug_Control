@@ -7,7 +7,7 @@ import os
 
 from close_loop_anesth.loop import perform_simulation
 
-np.random.seed(0)
+np.random.seed(2)
 training_patient = np.random.randint(1000, 1500, size=32)
 
 
@@ -47,9 +47,9 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
         bis_induction = df[df.Time < TIME_MAINTENANCE].BIS
         bis_maintenance = df[df.Time >= TIME_MAINTENANCE].BIS
         mask_induction = bis_induction > 40
-        biased_cost = np.sum((bis_induction - 50)**2 * mask_induction +
-                             (50-bis_induction)**3 * (~mask_induction), axis=0)
-        normal_cost = np.sum((bis_maintenance - 50)**2, axis=0)
+        biased_cost = np.sum((np.abs(bis_induction - 50))**3 * mask_induction +
+                             (50-bis_induction)**4 * (~mask_induction), axis=0)
+        normal_cost = np.sum(np.abs((bis_maintenance - 50))**3, axis=0)
         cost = (biased_cost + normal_cost) * ts
     elif type == 'TT':
         for i in range(len(df['BIS'])):
