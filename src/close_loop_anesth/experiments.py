@@ -48,7 +48,7 @@ def compute_cost(df: pd.DataFrame, type: str) -> float:
         bis_maintenance = df[df.Time >= TIME_MAINTENANCE].BIS
         mask_induction = bis_induction > 40
         biased_cost = np.sum((np.abs(bis_induction - 50))**2 * mask_induction +
-                             (np.abs(bis_induction - 50))**2.3 * (~mask_induction), axis=0)
+                             (np.abs(bis_induction - 50))**2.6 * (~mask_induction), axis=0)
         normal_cost = np.sum(np.abs((bis_maintenance - 50))**2, axis=0)
         cost = (biased_cost + normal_cost) * ts
     elif type == 'TT':
@@ -74,16 +74,18 @@ def random_simu(caseid: int,
     gender = np.random.randint(low=0, high=2)
 
     if control_type == 'PID':
-        ts = 2
+        ts = 1
     else:
-        ts = 2
+        ts = 1
+    ts_control = 5
     df_results = perform_simulation([age, height, weight, gender],
                                     phase,
                                     control_type=control_type,
                                     control_param=control_param,
                                     estim_param=estim_param,
                                     random_bool=[True, True],
-                                    sampling_time=ts)
+                                    sampling_time=ts,
+                                    sampling_time_control=ts_control)
     if output == 'cost':
         cost = compute_cost(df_results, cost_choice)
         return cost

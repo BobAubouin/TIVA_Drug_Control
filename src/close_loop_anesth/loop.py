@@ -18,7 +18,8 @@ def perform_simulation(Patient_info: list,
                        control_param: dict,
                        estim_param: dict,
                        random_bool: list,
-                       sampling_time: float = 2,
+                       sampling_time: float = 1,
+                       sampling_time_control: float = 5,
                        bool_noise: bool = True,
                        ) -> pd.DataFrame:
     """Run the simulation of the closed loop anesthesia system.
@@ -49,7 +50,9 @@ def perform_simulation(Patient_info: list,
     random_bool : list
         list of len 2, first index to add uncertainty in the PK model and second index to add uncertainty in the PD model.
     sampling_time : float, optional
-        sampling time of the simulation. The default is 2.
+        sampling time of the simulation. The default is 1.
+    sampling_time_control : float, optional
+        sampling time of the control. The default is 5.
     bool_noise : bool, optional
         add noise to the simulation. The default is True.
 
@@ -58,11 +61,11 @@ def perform_simulation(Patient_info: list,
     pd.DataFrame
         Dataframe with the results of the simulation.l
     """
-    # define sampling time
-    control_param['ts'] = sampling_time
+    
 
     patient_simu = pas.Patient(Patient_info, save_data_bool=False,
                                random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=sampling_time)
+    true_bis_param = patient_simu.hill_param
 
     # define input constraints
     bis_target = 50
@@ -71,6 +74,7 @@ def perform_simulation(Patient_info: list,
 
     # define controller
     if control_type == 'PID':
+        control_param['ts'] = sampling_time
         ratio = control_param['ratio']
         control_param_induction = {'Kp': control_param['Kp_1'],
                                    'Ti': control_param['Ti_1'],
@@ -86,6 +90,7 @@ def perform_simulation(Patient_info: list,
 
         controller = PID(**control_param_induction)
     else:
+        control_param['ts'] = sampling_time_control
         estim_param['ts'] = sampling_time
 
         # get Nominal model from the patient info
@@ -169,18 +174,20 @@ def perform_simulation(Patient_info: list,
             break
         start = perf_counter()
         if control_type == 'PID':
-            u_propo = controller.one_step(bis[0], bis_target)
-            u_remi = min(ur_max, max(0, u_propo * ratio))
-            u_propo = min(up_max, max(0, u_propo))
+            u_temp = controller.one_step(bis[0], bis_target)
+            if i*sampling_time % sampling_time_control==0:
+                u_remi = min(ur_max, max(0, u_temp * ratio))
+                u_propo = min(up_max, max(0, u_temp))
         else:
             x_estimated, _ = estimator.one_step([u_propo, u_remi], bis[0])
             if control_type == 'EKF_NMPC':
                 x_estimated = np.concatenate((x_estimated[:-1], BIS_param_nominal[:3], [x_estimated[-1]]))
-            u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
+            if i*sampling_time % sampling_time_control==0:
+                u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
         end = perf_counter()
         x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))
-        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x, Patient_info[2]]],
-                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x', 'weight'])
+        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x]+Patient_info+true_bis_param[:3]],
+                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x', 'age', 'height', 'weight', 'gender', 'c50p', 'c50r', 'gamma'])
         line_list.append(line)
 
         # if control_type == 'MHE_NMPC':
