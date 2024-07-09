@@ -3,7 +3,6 @@ from functools import partial
 import numpy as np
 import pandas as pd
 import optuna as opt
-import os
 
 from close_loop_anesth.loop import perform_simulation
 
@@ -63,9 +62,9 @@ def random_simu(caseid: int,
                 control_type: str,
                 control_param: dict,
                 estim_param: dict,
-                output: str = 'IAE',
+                output: str = 'cost',
                 phase: str = 'induction',
-                cost_choice: str = 'cost'):
+                cost_choice: str = 'IAE'):
     np.random.seed(caseid)
     # Generate random patient information with uniform distribution
     age = np.random.randint(low=18, high=70)
