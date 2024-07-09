@@ -13,9 +13,9 @@ from close_loop_anesth.experiments import random_simu, training_patient
 
 # define the parameter of the sudy
 control_type = 'PID'
-cost_choice = 'IAE_biased_normal'
+cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'PID_1000_2'
+study_name = 'PID_sampling_time_5'
 patient_number = 1000
 nb_of_step = 1000
 
@@ -24,13 +24,13 @@ def study_pid(trial):
     ratio = 2
     control_param = {'Kp_1': trial.suggest_float('Kp_1', 1e-4, 1, log=True),
                      'Ti_1': trial.suggest_float('Ti_1', 100, 1500),
-                     'Td_1': trial.suggest_float('Td_1', 0.1, 25),
+                     'Td_1': trial.suggest_float('Td_1', 0.01, 25, log=True),
                      'ratio': ratio}
 
     if phase == 'total':
-        control_param['Kp_2'] = trial.suggest_float('Kp_2', 1e-4, 1)
-        control_param['Ti_2'] = trial.suggest_float('Ti_2', 100, 1500)
-        control_param['Td_2'] = trial.suggest_float('Td_2', 0.1, 25)
+        control_param['Kp_2'] = trial.suggest_float('Kp_2', 1e-4, 1, log=True)
+        control_param['Ti_2'] = trial.suggest_float('Ti_2', 1, 600)
+        control_param['Td_2'] = trial.suggest_float('Td_2', 0.01, 25, log=True)
 
     estim_param = None
 

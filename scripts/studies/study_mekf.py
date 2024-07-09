@@ -16,23 +16,25 @@ from create_param import load_mekf_param
 
 # define the parameter of the sudy
 control_type = 'MEKF_NMPC'
-cost_choice = 'IAE_biased_normal'
+cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MEKF_1000_2'
+study_name = 'MEKF_sampling_time_5'
 patient_number = 1000
 point_number = [5, 6, 6]
 bool_non_linear = True
 nb_of_step = 200
+# q = 100
+alpha = 1
 
 
 def study_mekf(trial):
     r = trial.suggest_float('R', 1e-3, 1e4, log=True)
     epsilon = trial.suggest_float('epsilon', 0.1, 0.99)
-    lambda_2 = trial.suggest_float('lambda_2', 1e1, 1e3, log=True)
-    alpha = trial.suggest_float('alpha', 1e-1, 100, log=True)
+    lambda_2 = trial.suggest_float('lambda_2', 1e-1, 1e2, log=True)
+    # alpha = trial.suggest_float('alpha', 1e-1, 100, log=True)
     q = trial.suggest_float('q', 1e-3, 1e6, log=True)
     N_mpc = trial.suggest_int('N_mpc', 20, 80)
-    R_mpc = trial.suggest_float('R_mpc', 1e-2, 60)
+    R_mpc = trial.suggest_float('R_mpc', 1e-2, 500)
     R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e3, log=True)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
@@ -74,6 +76,8 @@ print(study.best_params)
 
 best_params = study.best_params
 best_params['point_number'] = point_number
+# best_params['q'] = q
+best_params['alpha'] = alpha
 
 # save the parameter of the sudy as json file
 dict = {'control_type': control_type,

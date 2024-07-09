@@ -16,23 +16,23 @@ from create_param import load_mhe_param
 
 # define the parameter of the sudy
 control_type = 'MHE_NMPC'
-cost_choice = 'IAE_biased_normal'
+cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MHE_1000_2'
+study_name = 'MHE_sampling_time_5'
 patient_number = 1000
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True
-nb_of_step = 100
+nb_of_step = 200
 
 
 def study_mhe(trial):
     R_mhe = trial.suggest_float('R', 1e-5, 1e-1, log=True)
     N_mhe = trial.suggest_int('N_mhe', 10, 30)
     N_mpc = trial.suggest_int('N_mpc', 10, 80)
-    R_mpc = trial.suggest_float('R_mpc', 1e-1, 100, log=True)
-    R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e3, log=True)
-    q = trial.suggest_float('q', 1e2, 1e6, log=True)
+    R_mpc = trial.suggest_float('R_mpc', 10, 500, log=True)
+    R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e2, log=True)
+    q = 1e3 #trial.suggest_float('q', 1e2, 1e6, log=True)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
@@ -77,7 +77,7 @@ best_params = study.best_params
 best_params['vmax'] = vmax
 best_params['vmin'] = vmin
 best_params['bool_non_linear'] = bool_non_linear
-
+best_params['q'] = 1e3
 
 # save the parameter of the sudy as json file
 dict = {'control_type': control_type,
