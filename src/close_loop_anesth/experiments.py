@@ -5,6 +5,7 @@ import pandas as pd
 import optuna as opt
 
 from close_loop_anesth.loop import perform_simulation
+from close_loop_anesth.loop_regressors import perform_simulation as perform_simulation_regressor
 
 np.random.seed(2)
 training_patient = np.random.randint(1000, 1500, size=32)
@@ -85,6 +86,43 @@ def random_simu(caseid: int,
                                     random_bool=[True, True],
                                     sampling_time=ts,
                                     sampling_time_control=ts_control)
+    if output == 'cost':
+        cost = compute_cost(df_results, cost_choice)
+        return cost
+    elif output == 'dataframe':
+        df_results.insert(0, 'caseid', caseid)
+        return df_results
+    else:
+        return
+
+
+def random_simu_regressor(caseid: int,
+                          control_type: str,
+                          control_param: dict,
+                          estim_param: dict,
+                          output: str = 'cost',
+                          phase: str = 'induction',
+                          cost_choice: str = 'IAE'):
+    np.random.seed(caseid)
+    # Generate random patient information with uniform distribution
+    age = np.random.randint(low=18, high=70)
+    height = np.random.randint(low=150, high=190)
+    weight = np.random.randint(low=50, high=100)
+    gender = np.random.randint(low=0, high=2)
+
+    if control_type == 'PID':
+        ts = 1
+    else:
+        ts = 1
+    ts_control = 5
+    df_results = perform_simulation_regressor([age, height, weight, gender],
+                                              phase,
+                                              control_type=control_type,
+                                              control_param=control_param,
+                                              estim_param=estim_param,
+                                              random_bool=[True, True],
+                                              sampling_time=ts,
+                                              sampling_time_control=ts_control)
     if output == 'cost':
         cost = compute_cost(df_results, cost_choice)
         return cost
