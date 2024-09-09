@@ -20,7 +20,7 @@ control_type = 'PID'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
 study_name = 'PID_sampling_time_5'
-patient_number = 100
+patient_number = 1000
 
 param_file = f'data/logs/{study_name}.json'
 with open(param_file, 'r') as f:
@@ -57,7 +57,6 @@ control_type = 'MEKF_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
 study_name = 'MEKF_sampling_time_5'
-patient_number = 100
 point_number = [5, 6, 6]
 bool_non_linear = True
 alpha = 1
@@ -110,7 +109,6 @@ control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
 study_name = 'MHE_sampling_time_5'
-patient_number = 100
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True
