@@ -13,7 +13,7 @@ from close_loop_anesth.mekf_mhe import MEKF_MHE
 # from close_loop_anesth.utils import custom_disturbance
 
 
-filename = "./data/regressor/reg_ElasticNet_induction.pkl"
+filename = "./data/regressor/reg_KNeighborsRegressor_feat_All.pkl"
 regressors = pickle.load(open(filename, 'rb'))
 scaler = pickle.load(open("./data/regressor/scale_All.pkl", 'rb'))
 regressor = regressors['BIS']
