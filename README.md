@@ -1,11 +1,11 @@
 # TIVA_Drug_Control
 
-Git depository associated to the paper "PID and Model Predictive Control Approach for Drug Dosage in Anesthesia During Induction: a Comparative Study".
+Git depository associated to the paper: B. Aubouin–Pairault, M. Fiacchini, and T. Dang, ***“Online identification of pharmacodynamic parameters for closed-loop anesthesia with model predictive control,”*** Computers & Chemical Engineering, vol. 191, p. 108837, Dec. 2024, doi: 10.1016/j.compchemeng.2024.108837. Please cite us if you use this code.
 
 Use the [Python Anesthesia Simulator](https://github.com/BobAubouin/Python_Anesthesia_Simulator) to run the simulation and compute the performances metrics.
 
 **Abstract:**
-In this paper, a PID controller is compared to an extended moving horizon estimator coupled with a model predictive control approach for the problem of dosing propofol and remifentanil during the induction of anesthesia. For the PID controller, taken from the literature, a fixed ratio is considered between propofol and remifentanil flow rates and an anti-windup strategy is used to prevent integration wind-up. The optimal control approach uses an MHE to estimate both the states and the pharmacodynamic parameters of the system, followed by a non-linear model predictive controller to compute the optimal drug rates according to the model. Both controllers are tuned using the same criterion, and are compared by simulating 500 uncertain patient models for the induction phase. 
+In this paper, a controller is proposed to automate the injection of propofol and remifentanil during general anesthesia using bispectral index (BIS) measurement. To handle the parameter uncertainties due to inter- and intra-patient variability, an extended estimator is used coupled with a Model Predictive Controller (MPC). Two methods are considered for the estimator: the first one is a multiple extended Kalman filter (MEKF), and the second is a moving horizon estimator (MHE). The state and parameter estimations are then used in the MPC to compute the next drug rates. The methods are compared with a PID from the literature. The robustness of the controller is evaluated using Monte-Carlo simulations on a wide population, introducing uncertainties in all parts of the model. Results both on the induction and maintenance phases of anesthesia show the potential interest in using this adaptive method to handle parameter uncertainties.
 
 
 # Installation
