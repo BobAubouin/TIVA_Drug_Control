@@ -113,9 +113,9 @@ def load_mekf_param(point_number: list[int],
     gamma_list = gamma_normal.ppf(points)
 
     # surrender list by Inf value
-    c50p_list = np.concatenate(([-np.Inf], c50p_list, [np.Inf]))
-    c50r_list = np.concatenate(([-np.Inf], c50r_list, [np.Inf]))
-    gamma_list = np.concatenate(([-np.Inf], gamma_list, [np.Inf]))
+    c50p_list = np.concatenate(([-np.inf], c50p_list, [np.inf]))
+    c50r_list = np.concatenate(([-np.inf], c50r_list, [np.inf]))
+    gamma_list = np.concatenate(([-np.inf], gamma_list, [np.inf]))
 
     P0 = 1e-3 * np.eye(9)
     Q = q
