@@ -61,7 +61,6 @@ def perform_simulation(Patient_info: list,
     pd.DataFrame
         Dataframe with the results of the simulation.l
     """
-    
 
     patient_simu = pas.Patient(Patient_info, save_data_bool=False,
                                random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=sampling_time)
@@ -175,14 +174,14 @@ def perform_simulation(Patient_info: list,
         start = perf_counter()
         if control_type == 'PID':
             u_temp = controller.one_step(bis[0], bis_target)
-            if i*sampling_time % sampling_time_control==0:
+            if i*sampling_time % sampling_time_control == 0:
                 u_remi = min(ur_max, max(0, u_temp * ratio))
                 u_propo = min(up_max, max(0, u_temp))
         else:
             x_estimated, _ = estimator.one_step([u_propo, u_remi], bis[0])
             if control_type == 'EKF_NMPC':
                 x_estimated = np.concatenate((x_estimated[:-1], BIS_param_nominal[:3], [x_estimated[-1]]))
-            if i*sampling_time % sampling_time_control==0:
+            if i*sampling_time % sampling_time_control == 0:
                 u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
         end = perf_counter()
         x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))

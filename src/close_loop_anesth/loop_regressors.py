@@ -80,7 +80,9 @@ def perform_simulation(Patient_info: list,
     random_bool : list
         list of len 2, first index to add uncertainty in the PK model and second index to add uncertainty in the PD model.
     sampling_time : float, optional
-        sampling time of the simulation. The default is 2.
+        sampling time of the simulation. The default is 1.
+    sampling_time_control : float, optional
+        sampling time of the control. The default is 5.
     bool_noise : bool, optional
         add noise to the simulation. The default is True.
 
@@ -91,6 +93,7 @@ def perform_simulation(Patient_info: list,
     """
     patient_simu = pas.Patient(Patient_info, save_data_bool=False,
                                random_PK=random_bool[0], random_PD=random_bool[1], model_bis='Bouillon', model_propo='Eleveld', model_remi='Eleveld', ts=sampling_time)
+
     hr = np.random.uniform(40, 80)
     # define input constraints
     bis_target = 50
@@ -194,7 +197,7 @@ def perform_simulation(Patient_info: list,
                     R_mpc = R_maintenance
 
         bis, _, _, _ = patient_simu.one_step(u_propo, u_remi, noise=bool_noise, dist=disturbance)
-        bis = regressor_bis(patient_simu, hr) + disturbance[0]
+        bis = regressor_bis(patient_simu, hr) + disturbance[0] + patient_simu.bis_noise[patient_simu.noise_index]
 
         if i == N_simu - 1:
             break
@@ -212,8 +215,8 @@ def perform_simulation(Patient_info: list,
                 u_propo, u_remi = controller.one_step(x_estimated, bis_target, R_mpc)
         end = perf_counter()
         x = np.concatenate((patient_simu.propo_pk.x[:4], patient_simu.remi_pk.x[:4]))
-        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x, Patient_info[2]]],
-                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x', 'weight'])
+        line = pd.DataFrame([[i*sampling_time, bis[0], u_propo, u_remi, end-start, x, hr]+Patient_info],
+                            columns=['Time', 'BIS', 'u_propo', 'u_remi', 'step_time', 'x', 'heart_rate', 'age', 'height', 'weight', 'gender'])
         line_list.append(line)
 
         # if control_type == 'MHE_NMPC':
