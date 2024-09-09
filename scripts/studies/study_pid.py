@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from close_loop_anesth.experiments import random_simu, training_patient
+from close_loop_anesth.experiments import random_simu, training_patient_index
 
 
 # define the parameter of the sudy
@@ -43,7 +43,7 @@ def study_pid(trial):
                          cost_choice=cost_choice)
 
     with mp.Pool(mp.cpu_count()) as p:
-        r = list(p.map(local_cost, training_patient))
+        r = list(p.map(local_cost, training_patient_index))
     return np.mean(r)
 
 
@@ -65,7 +65,7 @@ dict = {'control_type': control_type,
         'filename': f'{study_name}.csv',
         'best_params': study.best_params,
         'best_value': study.best_value,
-        'nb_of_step': nb_of_step,}
+        'nb_of_step': nb_of_step, }
 with open(f'data/logs/{study_name}.json', 'w') as f:
     json.dump(dict, f)
 

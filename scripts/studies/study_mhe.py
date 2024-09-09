@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from close_loop_anesth.experiments import random_simu, training_patient
+from close_loop_anesth.experiments import random_simu, training_patient_index
 from create_param import load_mhe_param
 
 # define the parameter of the sudy
@@ -32,7 +32,7 @@ def study_mhe(trial):
     N_mpc = trial.suggest_int('N_mpc', 10, 80)
     R_mpc = trial.suggest_float('R_mpc', 10, 500, log=True)
     R_maintenance = trial.suggest_float('R_maintenance', 1e-1, 1e2, log=True)
-    q = 1e3 #trial.suggest_float('q', 1e2, 1e6, log=True)
+    q = 1e3  # trial.suggest_float('q', 1e2, 1e6, log=True)
 
     control_param = {'R': R_mpc*np.diag([4, 1]),
                      'N': N_mpc,
@@ -58,9 +58,9 @@ def study_mhe(trial):
                          output='cost',
                          phase=phase,
                          cost_choice=cost_choice)
-    nb_cpu = min(mp.cpu_count(), len(training_patient))
+    nb_cpu = min(mp.cpu_count(), len(training_patient_index))
     with mp.Pool(nb_cpu) as p:
-        r = list(p.map(local_cost, training_patient))
+        r = list(p.map(local_cost, training_patient_index))
     return np.mean(r)
 
 

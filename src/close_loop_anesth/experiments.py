@@ -8,7 +8,24 @@ from close_loop_anesth.loop import perform_simulation
 from close_loop_anesth.loop_regressors import perform_simulation as perform_simulation_regressor
 
 np.random.seed(2)
-training_patient = np.random.randint(1000, 1500, size=32)
+nb_patient_train = 32
+
+age_train = np.linspace(18, 70, nb_patient_train)
+height_train = np.linspace(150, 190, nb_patient_train)
+weight_train = np.linspace(50, 100, nb_patient_train)
+gender_train = [0]*(nb_patient_train//2) + [1]*(nb_patient_train//2)
+
+np.random.shuffle(age_train)
+np.random.shuffle(height_train)
+np.random.shuffle(weight_train)
+np.random.shuffle(gender_train)
+
+patient_demo = pd.DataFrame({'age': age_train,
+                             'height': height_train,
+                             'weight': weight_train,
+                             'gender': gender_train})
+
+training_patient_index = np.arange(nb_patient_train)+1000
 
 
 def compute_cost(df: pd.DataFrame, type: str) -> float:
@@ -66,12 +83,20 @@ def random_simu(caseid: int,
                 output: str = 'cost',
                 phase: str = 'induction',
                 cost_choice: str = 'IAE'):
+
     np.random.seed(caseid)
-    # Generate random patient information with uniform distribution
-    age = np.random.randint(low=18, high=70)
-    height = np.random.randint(low=150, high=190)
-    weight = np.random.randint(low=50, high=100)
-    gender = np.random.randint(low=0, high=2)
+    if caseid >= 1000:
+        age = patient_demo['age'].iloc[caseid-1000]
+        height = patient_demo['height'].iloc[caseid-1000]
+        weight = patient_demo['weight'].iloc[caseid-1000]
+        gender = patient_demo['gender'].iloc[caseid-1000]
+
+    else:
+        # Generate random patient information with uniform distribution
+        age = np.random.randint(low=18, high=70)
+        height = np.random.randint(low=150, high=190)
+        weight = np.random.randint(low=50, high=100)
+        gender = np.random.randint(low=0, high=2)
 
     if control_type == 'PID':
         ts = 1
