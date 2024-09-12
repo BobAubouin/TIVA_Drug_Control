@@ -1,6 +1,8 @@
 # TIVA_Drug_Control
 
-Git depository associated to the paper: B. Aubouin–Pairault, M. Fiacchini, and T. Dang, ***“Online identification of pharmacodynamic parameters for closed-loop anesthesia with model predictive control,”*** Computers & Chemical Engineering, vol. 191, p. 108837, Dec. 2024, doi: 10.1016/j.compchemeng.2024.108837. Please cite us if you use this code.
+Git repository to study the control loop of porpofol and remifentanil to BIS in the context of Genreal Anesthesia.
+
+To reproduce the results of the journal paper please used the version tagged [here](https://github.com/BobAubouin/TIVA_Drug_Control/releases/tag/journal-result). If you use the code for research please cite B. Aubouin–Pairault, M. Fiacchini, and T. Dang, ***“Online identification of pharmacodynamic parameters for closed-loop anesthesia with model predictive control,”*** Computers & Chemical Engineering, vol. 191, p. 108837, Dec. 2024, doi: 10.1016/j.compchemeng.2024.108837. 
 
 Use the [Python Anesthesia Simulator](https://github.com/BobAubouin/Python_Anesthesia_Simulator) to run the simulation and compute the performances metrics.
 
