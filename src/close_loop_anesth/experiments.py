@@ -129,11 +129,18 @@ def random_simu_regressor(caseid: int,
                           phase: str = 'induction',
                           cost_choice: str = 'IAE'):
     np.random.seed(caseid)
-    # Generate random patient information with uniform distribution
-    age = np.random.randint(low=18, high=70)
-    height = np.random.randint(low=150, high=190)
-    weight = np.random.randint(low=50, high=100)
-    gender = np.random.randint(low=0, high=2)
+    if caseid >= 1000:
+        age = patient_demo['age'].iloc[caseid-1000]
+        height = patient_demo['height'].iloc[caseid-1000]
+        weight = patient_demo['weight'].iloc[caseid-1000]
+        gender = patient_demo['gender'].iloc[caseid-1000]
+
+    else:
+        # Generate random patient information with uniform distribution
+        age = np.random.randint(low=18, high=70)
+        height = np.random.randint(low=150, high=190)
+        weight = np.random.randint(low=50, high=100)
+        gender = np.random.randint(low=0, high=2)
 
     if control_type == 'PID':
         ts = 1
