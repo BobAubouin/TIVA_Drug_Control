@@ -18,7 +18,7 @@ from create_param import load_mhe_param
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MHE_sampling_time_5'
+study_name = 'MHE_training_ok'
 patient_number = 1000
 vmax = 1e4
 vmin = 0.01

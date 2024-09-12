@@ -19,7 +19,7 @@ from create_param import load_mekf_param, load_mhe_param
 control_type = 'PID'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'PID_sampling_time_5'
+study_name = 'PID_training_ok'
 patient_number = 1000
 
 param_file = f'data/logs/{study_name}.json'
@@ -56,7 +56,7 @@ print("Done!")
 control_type = 'MEKF_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MEKF_sampling_time_5'
+study_name = 'MEKF_training_ok'
 point_number = [5, 6, 6]
 bool_non_linear = True
 alpha = 1
@@ -108,7 +108,7 @@ print("Done!")
 control_type = 'MHE_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MHE_sampling_time_5'
+study_name = 'MHE_training_ok'
 vmax = 1e4
 vmin = 0.01
 bool_non_linear = True

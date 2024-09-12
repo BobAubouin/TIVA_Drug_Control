@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-from close_loop_anesth.experiments import random_simu, training_patient_index
+from close_loop_anesth.experiments import random_simu, training_patient_index, random_simu_regressor
 
 
 # define the parameter of the sudy
 control_type = 'PID'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'PID_sampling_time_5'
+study_name = 'PID_training_data'
 patient_number = 1000
 nb_of_step = 1000
 

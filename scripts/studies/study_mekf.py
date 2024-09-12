@@ -18,7 +18,7 @@ from create_param import load_mekf_param
 control_type = 'MEKF_NMPC'
 cost_choice = 'IAE_biased_40_normal'
 phase = 'total'
-study_name = 'MEKF_sampling_time_5'
+study_name = 'MEKF_training_ok'
 patient_number = 1000
 point_number = [5, 6, 6]
 bool_non_linear = True
