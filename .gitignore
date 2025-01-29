@@ -9,6 +9,7 @@ outputs/
 # python venv
 
 .env/
+.venv/
 
 .vscode/
 
